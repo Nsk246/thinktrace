@@ -67,3 +67,60 @@ async def ingest_pdf(file: UploadFile = File(...)):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+from core.graph import run_full_analysis
+
+
+@router.post("/analyze")
+async def analyze(request: AnalysisRequest):
+    """
+    Full ThinkTrace analysis pipeline:
+    Ingest → Claim Extraction → Parallel Agents → Epistemic Score
+    """
+    try:
+        # Step 1: ingest and extract claims
+        claim_tree = ingestion_agent.run(
+            content=request.content,
+            content_type=request.content_type,
+        )
+
+        # Step 2: run all 4 agents via LangGraph
+        result = run_full_analysis(claim_tree)
+
+        return {
+            "status": result.status,
+            "analysis_id": result.id,
+            "claim_count": len(result.claim_tree.claims),
+            "argument_graph": {
+                "nodes": len(result.argument_graph.nodes),
+                "edges": len(result.argument_graph.edges),
+            },
+            "fallacies": [
+                {
+                    "name": f.name,
+                    "severity": f.severity,
+                    "affected_claim": f.affected_claim_id,
+                    "explanation": f.explanation,
+                }
+                for f in result.fallacies
+            ],
+            "fact_checks": [
+                {
+                    "claim_id": fc.claim_id,
+                    "verdict": fc.verdict,
+                    "confidence": fc.confidence,
+                    "explanation": fc.explanation,
+                    "sources": fc.sources,
+                }
+                for fc in result.fact_checks
+            ],
+            "epistemic_score": {
+                "evidence_score": result.epistemic_score.evidence_score,
+                "logic_score": result.epistemic_score.logic_score,
+                "overall_score": result.epistemic_score.overall_score,
+                "summary": result.epistemic_score.summary,
+            },
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
