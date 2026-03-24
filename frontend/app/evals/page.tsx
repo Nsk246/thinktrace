@@ -69,12 +69,17 @@ export default function EvalsPage() {
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
                     <div>
                       <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text)", marginBottom: 2 }}>{r.description}</div>
-                      <div style={{ fontSize: 11, color: "var(--text4)" }}>{r.eval_id}</div>
+                      <div style={{ fontSize: 11, color: "var(--text4)" }}>
+                        {r.eval_id} · expected score {r.expected_score_range[0]}–{r.expected_score_range[1]}
+                      </div>
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-                      <span style={{ fontSize: 22, fontWeight: 800, color: "#6366f1", letterSpacing: "-1px" }}>{r.epistemic_score}</span>
+                      <div style={{ textAlign: "right" }}>
+                        <div style={{ fontSize: 22, fontWeight: 800, color: "#6366f1", letterSpacing: "-1px" }}>{r.epistemic_score}</div>
+                        <div style={{ fontSize: 10, color: "var(--text4)" }}>scored</div>
+                      </div>
                       <span style={{ fontSize: 10, fontWeight: 600, padding: "3px 10px", borderRadius: 100, background: r.passed ? "rgba(34,197,94,0.12)" : "rgba(239,68,68,0.12)", color: r.passed ? "#22c55e" : "#ef4444" }}>
-                        {r.passed ? "PASS" : "FAIL"}
+                        {r.passed ? "AGENT CORRECT" : "AGENT WRONG"}
                       </span>
                     </div>
                   </div>

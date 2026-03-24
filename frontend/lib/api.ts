@@ -57,7 +57,12 @@ export interface AnalysisResult {
 }
 
 export const analyzeText = async (content: string, type = "text"): Promise<AnalysisResult> => {
-  const { data } = await api.post("/api/v1/analyze", { content, content_type: type });
+  let org_id = "default";
+  try {
+    const t = localStorage.getItem("token");
+    if (t) { const p = JSON.parse(atob(t.split(".")[1])); org_id = p.org_id || "default"; }
+  } catch {}
+  const { data } = await api.post("/api/v1/analyze", { content, content_type: type, org_id });
   return data;
 };
 
