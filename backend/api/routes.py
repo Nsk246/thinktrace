@@ -2,11 +2,41 @@ from fastapi import APIRouter, UploadFile, File, HTTPException
 from agents.ingestion import IngestionAgent
 from core.models import AnalysisRequest, ContentType
 from core.graph import run_full_analysis
+from core.database import SessionLocal, AnalysisRecord
 from celery.result import AsyncResult
 from services.celery_app import celery_app
+from datetime import datetime
+import logging
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1", tags=["analysis"])
 ingestion_agent = IngestionAgent()
+
+
+def save_analysis_record(result, request: AnalysisRequest):
+    """Save analysis to DB using its own session to avoid threading conflicts."""
+    db = SessionLocal()
+    try:
+        record = AnalysisRecord(
+            org_id=request.org_id,
+            user_id="anonymous",
+            job_id=result.id,
+            content_type=request.content_type.value,
+            content_preview=request.content[:120] if request.content else "",
+            claim_count=len(result.claim_tree.claims),
+            fallacy_count=len(result.fallacies),
+            overall_score=result.epistemic_score.overall_score,
+            status="complete",
+            completed_at=datetime.utcnow(),
+        )
+        db.add(record)
+        db.commit()
+        logger.info(f"Saved analysis {result.id} for org {request.org_id}")
+    except Exception as e:
+        logger.error(f"Failed to save analysis: {e}")
+        db.rollback()
+    finally:
+        db.close()
 
 
 @router.post("/ingest/text")
@@ -63,6 +93,7 @@ async def analyze(request: AnalysisRequest):
             content_type=request.content_type,
         )
         result = run_full_analysis(claim_tree)
+        save_analysis_record(result, request)
         return {
             "status": result.status,
             "analysis_id": result.id,

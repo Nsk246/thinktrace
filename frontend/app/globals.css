@@ -22,16 +22,16 @@
 }
 
 .light {
-  --bg: #fafafa;
+  --bg: #f8f8f8;
   --bg2: #ffffff;
-  --bg3: #f4f4f5;
+  --bg3: #f0f0f0;
   --card: #ffffff;
-  --border: #e4e4e7;
-  --border2: #d4d4d8;
+  --border: #c8c8d0;
+  --border2: #a0a0b0;
   --text: #09090b;
-  --text2: #3f3f46;
-  --text3: #71717a;
-  --text4: #a1a1aa;
+  --text2: #2d2d35;
+  --text3: #55555f;
+  --text4: #88889a;
 }
 
 html { color-scheme: dark; }
@@ -60,12 +60,12 @@ body {
 
 .card {
   background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 14px;
+  border: 1.5px solid var(--border);
+  border-radius: 16px;
 }
 
 .card-hover { transition: border-color 0.15s, transform 0.15s; }
-.card-hover:hover { border-color: var(--border2); transform: translateY(-1px); }
+.card-hover:hover { border-color: var(--border2); transform: translateY(-2px); }
 
 @keyframes spin { to { transform: rotate(360deg); } }
 .spin { animation: spin 0.8s linear infinite; }
@@ -76,14 +76,22 @@ body {
 @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
 .pulse { animation: pulse 1.5s ease-in-out infinite; }
 
-/* Responsive font sizes — big on desktop, sensible on mobile */
+@keyframes glow-pulse {
+  0%, 100% { box-shadow: 0 0 20px var(--glow-color, rgba(99,102,241,0.3)); }
+  50% { box-shadow: 0 0 40px var(--glow-color, rgba(99,102,241,0.5)); }
+}
+
 .hero-title {
-  font-size: 48px;
+  font-size: 52px;
   font-weight: 800;
   letter-spacing: -2px;
   line-height: 1.1;
 }
 
 @media (max-width: 640px) {
-  .hero-title { font-size: 34px; letter-spacing: -1px; }
+  .hero-title { font-size: 36px; letter-spacing: -1px; }
 }
+
+/* Light mode border boost */
+.light .card { border-color: var(--border); }
+.light .card-hover:hover { border-color: var(--border2); }
