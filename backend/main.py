@@ -3,6 +3,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from core.config import get_settings
 from api.routes import router
+from api.watchdog_routes import router as watchdog_router
+from agents.watchdog import watchdog
 import logging
 
 logging.basicConfig(level=logging.INFO)
@@ -14,8 +16,10 @@ settings = get_settings()
 async def lifespan(app: FastAPI):
     logger.info("ThinkTrace starting up...")
     logger.info(f"Environment: {settings.app_env}")
+    logger.info("Watchdog scheduler started")
     yield
     logger.info("ThinkTrace shutting down...")
+    watchdog.shutdown()
 
 
 app = FastAPI(
@@ -34,6 +38,7 @@ app.add_middleware(
 )
 
 app.include_router(router)
+app.include_router(watchdog_router)
 
 
 @app.get("/")
@@ -48,4 +53,7 @@ async def root():
 
 @app.get("/health")
 async def health():
-    return {"status": "healthy"}
+    return {
+        "status": "healthy",
+        "watchdog": watchdog.get_status(),
+    }
