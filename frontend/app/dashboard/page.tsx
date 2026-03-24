@@ -1,8 +1,17 @@
 "use client";
 import { useEffect, useState } from "react";
-import { getDashboard, getEvalResults, api } from "@/lib/api";
+import { getDashboard, getEvalResults } from "@/lib/api";
 import { Navbar } from "@/components/Navbar";
 import Link from "next/link";
+
+const capabilities = [
+  { title: "Analyze text", desc: "Audit any argument instantly", href: "/", icon: "🔍" },
+  { title: "PDF upload", desc: "Analyze research papers", href: "/", icon: "📄" },
+  { title: "URL analysis", desc: "Analyze webpages and videos", href: "/", icon: "🌐" },
+  { title: "Watchdog", desc: "Monitor URLs autonomously", href: "/watchdog", icon: "👁" },
+  { title: "Eval suite", desc: "Run LLM evaluation tests", href: "/evals", icon: "🧪" },
+  { title: "Team", desc: "Manage org members", href: "/team", icon: "👥" },
+];
 
 export default function Dashboard() {
   const [data, setData] = useState<any>(null);
@@ -10,23 +19,17 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (!token) { window.location.href = "/auth"; return; }
-
-    Promise.all([
-      getDashboard().catch(() => null),
-      getEvalResults().catch(() => null),
-    ]).then(([dash, evals]) => {
-      setData(dash);
-      setEvalData(evals);
-    }).finally(() => setLoading(false));
+    if (!localStorage.getItem("token")) { window.location.href = "/auth"; return; }
+    Promise.all([getDashboard().catch(() => null), getEvalResults().catch(() => null)])
+      .then(([d, e]) => { setData(d); setEvalData(e); })
+      .finally(() => setLoading(false));
   }, []);
 
   if (loading) return (
     <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
       <Navbar />
-      <div className="flex items-center justify-center h-64">
-        <div className="w-8 h-8 rounded-full spin" style={{ border: "3px solid var(--border)", borderTop: "3px solid var(--accent)" }} />
+      <div style={{ display: "flex", justifyContent: "center", paddingTop: 80 }}>
+        <div style={{ width: 32, height: 32, borderRadius: "50%", border: "3px solid var(--border)", borderTop: "3px solid #6366f1" }} className="spin" />
       </div>
     </div>
   );
@@ -34,83 +37,82 @@ export default function Dashboard() {
   if (!data) return (
     <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
       <Navbar />
-      <div className="flex flex-col items-center justify-center h-64 gap-4">
-        <p style={{ color: "var(--text2)" }}>Could not load dashboard</p>
-        <Link href="/auth" className="text-sm px-4 py-2 rounded-xl text-white accent-gradient">Sign in</Link>
+      <div style={{ textAlign: "center", paddingTop: 80 }}>
+        <p style={{ color: "var(--text3)", marginBottom: 16 }}>Could not load dashboard</p>
+        <Link href="/auth" style={{ padding: "8px 20px", borderRadius: 10, background: "linear-gradient(135deg,#6366f1,#0ea5e9)", color: "#fff", textDecoration: "none", fontSize: 13, fontWeight: 600 }}>Sign in</Link>
       </div>
     </div>
   );
 
+  const stats = [
+    { label: "Total analyses", value: data.usage.total_analyses },
+    { label: "Completed", value: data.usage.completed_analyses },
+    { label: "Avg score", value: data.usage.avg_epistemic_score ?? "—" },
+    { label: "Members", value: data.usage.member_count },
+  ];
+
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
       <Navbar />
-      <div className="max-w-5xl mx-auto px-6 py-10">
+      <div style={{ maxWidth: 1100, margin: "0 auto", padding: "40px 24px 80px" }}>
 
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-2xl font-bold text-gradient">{data.org.name}</h1>
-          <p className="text-sm mt-1" style={{ color: "var(--text2)" }}>
-            Workspace · {data.org.slug}
-          </p>
+        <div style={{ marginBottom: 32 }}>
+          <h1 style={{ fontSize: 28, fontWeight: 800, letterSpacing: "-1px", marginBottom: 4 }}>
+            <span className="gradient-text">{data.org.name}</span>
+          </h1>
+          <p style={{ fontSize: 13, color: "var(--text3)" }}>{data.org.slug}</p>
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-          {[
-            { label: "Total analyses", val: data.usage.total_analyses, icon: "📊" },
-            { label: "Completed", val: data.usage.completed_analyses, icon: "✅" },
-            { label: "Avg score", val: data.usage.avg_epistemic_score ?? "—", icon: "🎯" },
-            { label: "Members", val: data.usage.member_count, icon: "👥" },
-          ].map(s => (
-            <div key={s.label} className="card p-5">
-              <div className="text-2xl mb-1">{s.icon}</div>
-              <div className="text-2xl font-bold mb-1" style={{ color: "var(--accent)" }}>{s.val}</div>
-              <div className="text-xs" style={{ color: "var(--text2)" }}>{s.label}</div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12, marginBottom: 28 }}>
+          {stats.map(s => (
+            <div key={s.label} className="card" style={{ padding: "18px 20px" }}>
+              <div style={{ fontSize: 11, color: "var(--text4)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>{s.label}</div>
+              <div style={{ fontSize: 28, fontWeight: 700, color: "#6366f1", letterSpacing: "-1px" }}>{s.value}</div>
             </div>
           ))}
         </div>
 
-        {/* Capabilities grid */}
-        <div className="grid md:grid-cols-3 gap-4 mb-8">
-          {[
-            { title: "Analyze text", desc: "Paste any argument and audit it instantly", href: "/", icon: "🔍" },
-            { title: "PDF upload", desc: "Upload research papers and documents", href: "/?mode=pdf", icon: "📄" },
-            { title: "URL analysis", desc: "Analyze any webpage or YouTube video", href: "/?mode=url", icon: "🌐" },
-            { title: "Watchdog", desc: "Monitor URLs for content changes autonomously", href: "/watchdog", icon: "👁" },
-            { title: "Eval suite", desc: "Run the LLM evaluation framework", href: "/evals", icon: "🧪" },
-            { title: "Team", desc: "Manage org members and roles", href: "/team", icon: "👥" },
-          ].map(c => (
-            <Link key={c.title} href={c.href}
-                  className="card p-5 hover:glow transition-all group block">
-              <div className="text-2xl mb-2">{c.icon}</div>
-              <div className="font-semibold text-sm mb-1 group-hover:text-gradient transition"
-                   style={{ color: "var(--text)" }}>{c.title}</div>
-              <div className="text-xs" style={{ color: "var(--text2)" }}>{c.desc}</div>
-            </Link>
-          ))}
+        {/* Capabilities */}
+        <div style={{ marginBottom: 28 }}>
+          <h2 style={{ fontSize: 14, fontWeight: 600, color: "var(--text2)", marginBottom: 14, letterSpacing: "-.3px" }}>Platform capabilities</h2>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10 }}>
+            {capabilities.map(c => (
+              <Link key={c.title} href={c.href} style={{ textDecoration: "none" }}>
+                <div className="card card-hover" style={{ padding: "18px 20px", cursor: "pointer" }}>
+                  <div style={{ fontSize: 24, marginBottom: 10 }}>{c.icon}</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text)", marginBottom: 4 }}>{c.title}</div>
+                  <div style={{ fontSize: 12, color: "var(--text3)" }}>{c.desc}</div>
+                </div>
+              </Link>
+            ))}
+          </div>
         </div>
 
         {/* Eval results */}
-        {evalData && evalData.status === "complete" && (
-          <div className="card p-6 mb-8">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold" style={{ color: "var(--text)" }}>Latest eval results</h3>
-              <span className="text-xs px-2 py-1 rounded-full font-medium"
-                    style={{ background: "rgba(34,197,94,0.15)", color: "#22c55e" }}>
-                {evalData.passed}/{evalData.total} passing
-              </span>
+        {evalData?.status === "complete" && (
+          <div className="card" style={{ padding: "20px 24px", marginBottom: 20 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+              <h2 style={{ fontSize: 14, fontWeight: 600, color: "var(--text2)" }}>Latest eval results</h2>
+              <span style={{
+                fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 100,
+                background: "rgba(34,197,94,0.1)", color: "#22c55e",
+              }}>{evalData.passed}/{evalData.total} passing</span>
             </div>
-            <div className="space-y-2">
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               {evalData.results?.map((r: any) => (
-                <div key={r.eval_id} className="flex items-center justify-between p-3 rounded-xl text-sm"
-                     style={{ background: "var(--bg2)" }}>
-                  <span style={{ color: "var(--text2)" }}>{r.description}</span>
-                  <div className="flex items-center gap-3">
-                    <span style={{ color: "var(--accent)" }}>{r.epistemic_score}/100</span>
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${r.passed ? "text-green-400" : "text-red-400"}`}
-                          style={{ background: r.passed ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)" }}>
-                      {r.passed ? "PASS" : "FAIL"}
-                    </span>
+                <div key={r.eval_id} style={{
+                  display: "flex", alignItems: "center", justifyContent: "space-between",
+                  padding: "10px 14px", background: "var(--bg3)", borderRadius: 8,
+                }}>
+                  <span style={{ fontSize: 12, color: "var(--text3)" }}>{r.description}</span>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: "#6366f1" }}>{r.epistemic_score}</span>
+                    <span style={{
+                      fontSize: 10, fontWeight: 600, padding: "2px 8px", borderRadius: 100,
+                      background: r.passed ? "rgba(34,197,94,0.12)" : "rgba(239,68,68,0.12)",
+                      color: r.passed ? "#22c55e" : "#ef4444",
+                    }}>{r.passed ? "PASS" : "FAIL"}</span>
                   </div>
                 </div>
               ))}
@@ -119,36 +121,35 @@ export default function Dashboard() {
         )}
 
         {/* Recent analyses */}
-        <div className="card p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold" style={{ color: "var(--text)" }}>Recent analyses</h3>
-            <Link href="/" className="text-xs px-3 py-1.5 rounded-lg text-white accent-gradient">
-              New analysis
-            </Link>
+        <div className="card" style={{ padding: "20px 24px" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+            <h2 style={{ fontSize: 14, fontWeight: 600, color: "var(--text2)" }}>Recent analyses</h2>
+            <Link href="/" style={{
+              fontSize: 12, fontWeight: 600, padding: "6px 14px", borderRadius: 8,
+              background: "linear-gradient(135deg,#6366f1,#0ea5e9)", color: "#fff", textDecoration: "none",
+            }}>New analysis</Link>
           </div>
           {data.recent_analyses.length === 0 ? (
-            <div className="text-center py-8">
-              <p className="text-sm mb-3" style={{ color: "var(--text2)" }}>No analyses yet</p>
-              <Link href="/" className="text-sm px-4 py-2 rounded-xl text-white accent-gradient inline-block">
-                Run your first analysis →
-              </Link>
+            <div style={{ textAlign: "center", padding: "32px 0" }}>
+              <p style={{ color: "var(--text3)", fontSize: 13, marginBottom: 12 }}>No analyses yet</p>
+              <Link href="/" style={{
+                fontSize: 13, fontWeight: 600, padding: "8px 18px", borderRadius: 10,
+                background: "linear-gradient(135deg,#6366f1,#0ea5e9)", color: "#fff", textDecoration: "none",
+              }}>Run your first analysis →</Link>
             </div>
           ) : (
-            <div className="space-y-2">
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               {data.recent_analyses.map((a: any) => (
-                <div key={a.id} className="flex items-center justify-between p-3 rounded-xl"
-                     style={{ background: "var(--bg2)" }}>
-                  <span className="text-sm truncate max-w-xs" style={{ color: "var(--text2)" }}>
+                <div key={a.id} style={{
+                  display: "flex", alignItems: "center", justifyContent: "space-between",
+                  padding: "10px 14px", background: "var(--bg3)", borderRadius: 8,
+                }}>
+                  <span style={{ fontSize: 12, color: "var(--text3)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginRight: 16 }}>
                     {a.content_preview || "—"}
                   </span>
-                  <div className="flex items-center gap-3 flex-shrink-0">
-                    <span className="font-bold text-sm" style={{ color: "var(--accent)" }}>
-                      {a.overall_score ?? "—"}
-                    </span>
-                    <span className="text-xs px-2 py-0.5 rounded-full"
-                          style={{ background: "rgba(34,197,94,0.15)", color: "#22c55e" }}>
-                      {a.status}
-                    </span>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+                    <span style={{ fontSize: 14, fontWeight: 700, color: "#6366f1" }}>{a.overall_score ?? "—"}</span>
+                    <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 100, background: "rgba(34,197,94,0.1)", color: "#22c55e" }}>{a.status}</span>
                   </div>
                 </div>
               ))}
