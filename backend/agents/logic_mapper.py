@@ -40,9 +40,14 @@ Return this exact structure:
 
 class LogicMapperAgent:
     def run(self, claim_tree: ClaimTree) -> ArgumentGraph:
+        # Limit to 8 most important claims to keep mapping reliable
+        sorted_claims = sorted(
+            claim_tree.claims,
+            key=lambda c: 0 if c.claim_type == "conclusion" else (1 if c.claim_type == "sub_claim" else 2)
+        )[:8]
         claims_text = "\n".join([
             f"ID: {c.id} | Type: {c.claim_type} | Text: {c.text}"
-            for c in claim_tree.claims
+            for c in sorted_claims
         ])
 
         messages = [

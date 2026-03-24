@@ -12,7 +12,7 @@ llm = ChatAnthropic(
     api_key=settings.anthropic_api_key,
     max_tokens=4096,
 )
-search = DuckDuckGoSearchRun()
+search = DuckDuckGoSearchRun(backend='auto')
 
 FACT_CHECK_PROMPT = """You are a rigorous fact-checker. You have been given a claim and search results related to it.
 

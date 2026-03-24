@@ -1,25 +1,18 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException
-from fastapi.responses import JSONResponse
 from agents.ingestion import IngestionAgent
 from core.models import AnalysisRequest, ContentType
 from core.graph import run_full_analysis
 from celery.result import AsyncResult
 from services.celery_app import celery_app
-import traceback
 
 router = APIRouter(prefix="/api/v1", tags=["analysis"])
 ingestion_agent = IngestionAgent()
 
 
-# ── Ingestion endpoints ──────────────────────────────────────────
-
 @router.post("/ingest/text")
 async def ingest_text(request: AnalysisRequest):
     try:
-        claim_tree = ingestion_agent.run(
-            content=request.content,
-            content_type=ContentType.TEXT,
-        )
+        claim_tree = ingestion_agent.run(content=request.content, content_type=ContentType.TEXT)
         return {
             "status": "success",
             "source_type": claim_tree.source_type,
@@ -33,10 +26,7 @@ async def ingest_text(request: AnalysisRequest):
 @router.post("/ingest/url")
 async def ingest_url(url: str):
     try:
-        claim_tree = ingestion_agent.run(
-            content=url,
-            content_type=ContentType.URL,
-        )
+        claim_tree = ingestion_agent.run(content=url, content_type=ContentType.URL)
         return {
             "status": "success",
             "source_type": claim_tree.source_type,
@@ -53,10 +43,7 @@ async def ingest_pdf(file: UploadFile = File(...)):
         raise HTTPException(status_code=400, detail="File must be a PDF")
     try:
         pdf_bytes = await file.read()
-        claim_tree = ingestion_agent.run(
-            content=pdf_bytes,
-            content_type=ContentType.PDF,
-        )
+        claim_tree = ingestion_agent.run(content=pdf_bytes, content_type=ContentType.PDF)
         return {
             "status": "success",
             "source_type": claim_tree.source_type,
@@ -67,8 +54,6 @@ async def ingest_pdf(file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
-# ── Sync analysis (direct, blocks until complete) ────────────────
 
 @router.post("/analyze")
 async def analyze(request: AnalysisRequest):
@@ -83,25 +68,36 @@ async def analyze(request: AnalysisRequest):
             "analysis_id": result.id,
             "claim_count": len(result.claim_tree.claims),
             "argument_graph": {
-                "nodes": len(result.argument_graph.nodes),
-                "edges": len(result.argument_graph.edges),
+                "nodes": [n.model_dump() for n in result.argument_graph.nodes],
+                "edges": [e.model_dump() for e in result.argument_graph.edges],
             },
-            "fallacies": [f.model_dump() for f in result.fallacies],
-            "fact_checks": [fc.model_dump() for fc in result.fact_checks],
+            "fallacies": [
+                {
+                    "name": f.name,
+                    "severity": f.severity,
+                    "affected_claim": f.affected_claim_id,
+                    "explanation": f.explanation,
+                }
+                for f in result.fallacies
+            ],
+            "fact_checks": [
+                {
+                    "claim_id": fc.claim_id,
+                    "verdict": fc.verdict,
+                    "confidence": fc.confidence,
+                    "explanation": fc.explanation,
+                    "sources": fc.sources,
+                }
+                for fc in result.fact_checks
+            ],
             "epistemic_score": result.epistemic_score.model_dump(),
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# ── Async analysis (queued via Celery) ───────────────────────────
-
 @router.post("/analyze/async")
 async def analyze_async(request: AnalysisRequest):
-    """
-    Submit analysis job to queue. Returns job_id immediately.
-    Poll /jobs/{job_id} for status and results.
-    """
     try:
         from services.tasks import run_analysis_task
         task = run_analysis_task.apply_async(
@@ -119,52 +115,26 @@ async def analyze_async(request: AnalysisRequest):
 
 @router.get("/jobs/{job_id}")
 async def get_job_status(job_id: str):
-    """
-    Poll for async job status and results.
-    States: PENDING → PROGRESS → SUCCESS | FAILURE
-    """
     try:
         task_result = AsyncResult(job_id, app=celery_app)
         state = task_result.state
-
         if state == "PENDING":
             return {"job_id": job_id, "status": "pending", "progress": 0}
-
         elif state == "PROGRESS":
             meta = task_result.info or {}
-            return {
-                "job_id": job_id,
-                "status": "processing",
-                "step": meta.get("step", "unknown"),
-                "progress": meta.get("progress", 0),
-                "claim_count": meta.get("claim_count"),
-            }
-
+            return {"job_id": job_id, "status": "processing", "step": meta.get("step"), "progress": meta.get("progress", 0)}
         elif state == "SUCCESS":
-            return {
-                "job_id": job_id,
-                "status": "complete",
-                "progress": 100,
-                "result": task_result.result,
-            }
-
+            return {"job_id": job_id, "status": "complete", "progress": 100, "result": task_result.result}
         elif state == "FAILURE":
-            return {
-                "job_id": job_id,
-                "status": "failed",
-                "error": str(task_result.info),
-            }
-
+            return {"job_id": job_id, "status": "failed", "error": str(task_result.info)}
         else:
             return {"job_id": job_id, "status": state.lower()}
-
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/jobs")
 async def list_jobs():
-    """Health check for the task queue."""
     try:
         inspect = celery_app.control.inspect()
         active = inspect.active()

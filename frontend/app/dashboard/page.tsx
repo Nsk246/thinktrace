@@ -1,99 +1,161 @@
 "use client";
-
 import { useEffect, useState } from "react";
-import { getDashboard } from "@/lib/api";
+import { getDashboard, getEvalResults, api } from "@/lib/api";
+import { Navbar } from "@/components/Navbar";
 import Link from "next/link";
 
 export default function Dashboard() {
   const [data, setData] = useState<any>(null);
+  const [evalData, setEvalData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    getDashboard()
-      .then(setData)
-      .catch(() => setData(null))
-      .finally(() => setLoading(false));
+    const token = localStorage.getItem("token");
+    if (!token) { window.location.href = "/auth"; return; }
+
+    Promise.all([
+      getDashboard().catch(() => null),
+      getEvalResults().catch(() => null),
+    ]).then(([dash, evals]) => {
+      setData(dash);
+      setEvalData(evals);
+    }).finally(() => setLoading(false));
   }, []);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+  if (loading) return (
+    <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
+      <Navbar />
+      <div className="flex items-center justify-center h-64">
+        <div className="w-8 h-8 rounded-full spin" style={{ border: "3px solid var(--border)", borderTop: "3px solid var(--accent)" }} />
       </div>
-    );
-  }
+    </div>
+  );
 
-  if (!data) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-gray-600 mb-4">Not authenticated or no data</p>
-          <Link href="/" className="text-indigo-600 hover:underline">Go to home</Link>
-        </div>
+  if (!data) return (
+    <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
+      <Navbar />
+      <div className="flex flex-col items-center justify-center h-64 gap-4">
+        <p style={{ color: "var(--text2)" }}>Could not load dashboard</p>
+        <Link href="/auth" className="text-sm px-4 py-2 rounded-xl text-white accent-gradient">Sign in</Link>
       </div>
-    );
-  }
+    </div>
+  );
 
   return (
-    <main className="min-h-screen bg-gray-50">
-      <header className="bg-white border-b border-gray-200 px-6 py-4">
-        <div className="max-w-5xl mx-auto flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-bold text-gray-900">{data.org.name} — Dashboard</h1>
-            <p className="text-xs text-gray-500">{data.org.slug}</p>
-          </div>
-          <Link href="/" className="text-sm text-indigo-600 font-medium">← Analyze</Link>
-        </div>
-      </header>
-
+    <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
+      <Navbar />
       <div className="max-w-5xl mx-auto px-6 py-10">
+
+        {/* Header */}
+        <div className="mb-8">
+          <h1 className="text-2xl font-bold text-gradient">{data.org.name}</h1>
+          <p className="text-sm mt-1" style={{ color: "var(--text2)" }}>
+            Workspace · {data.org.slug}
+          </p>
+        </div>
+
+        {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           {[
-            { label: "Total analyses", value: data.usage.total_analyses },
-            { label: "Completed", value: data.usage.completed_analyses },
-            { label: "Avg score", value: data.usage.avg_epistemic_score ?? "—" },
-            { label: "Members", value: data.usage.member_count },
-          ].map((stat) => (
-            <div key={stat.label} className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm text-center">
-              <div className="text-3xl font-bold text-indigo-600 mb-1">{stat.value}</div>
-              <div className="text-xs text-gray-500">{stat.label}</div>
+            { label: "Total analyses", val: data.usage.total_analyses, icon: "📊" },
+            { label: "Completed", val: data.usage.completed_analyses, icon: "✅" },
+            { label: "Avg score", val: data.usage.avg_epistemic_score ?? "—", icon: "🎯" },
+            { label: "Members", val: data.usage.member_count, icon: "👥" },
+          ].map(s => (
+            <div key={s.label} className="card p-5">
+              <div className="text-2xl mb-1">{s.icon}</div>
+              <div className="text-2xl font-bold mb-1" style={{ color: "var(--accent)" }}>{s.val}</div>
+              <div className="text-xs" style={{ color: "var(--text2)" }}>{s.label}</div>
             </div>
           ))}
         </div>
 
-        <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-          <h3 className="font-semibold text-gray-900 mb-4">Recent analyses</h3>
+        {/* Capabilities grid */}
+        <div className="grid md:grid-cols-3 gap-4 mb-8">
+          {[
+            { title: "Analyze text", desc: "Paste any argument and audit it instantly", href: "/", icon: "🔍" },
+            { title: "PDF upload", desc: "Upload research papers and documents", href: "/?mode=pdf", icon: "📄" },
+            { title: "URL analysis", desc: "Analyze any webpage or YouTube video", href: "/?mode=url", icon: "🌐" },
+            { title: "Watchdog", desc: "Monitor URLs for content changes autonomously", href: "/watchdog", icon: "👁" },
+            { title: "Eval suite", desc: "Run the LLM evaluation framework", href: "/evals", icon: "🧪" },
+            { title: "Team", desc: "Manage org members and roles", href: "/team", icon: "👥" },
+          ].map(c => (
+            <Link key={c.title} href={c.href}
+                  className="card p-5 hover:glow transition-all group block">
+              <div className="text-2xl mb-2">{c.icon}</div>
+              <div className="font-semibold text-sm mb-1 group-hover:text-gradient transition"
+                   style={{ color: "var(--text)" }}>{c.title}</div>
+              <div className="text-xs" style={{ color: "var(--text2)" }}>{c.desc}</div>
+            </Link>
+          ))}
+        </div>
+
+        {/* Eval results */}
+        {evalData && evalData.status === "complete" && (
+          <div className="card p-6 mb-8">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-semibold" style={{ color: "var(--text)" }}>Latest eval results</h3>
+              <span className="text-xs px-2 py-1 rounded-full font-medium"
+                    style={{ background: "rgba(34,197,94,0.15)", color: "#22c55e" }}>
+                {evalData.passed}/{evalData.total} passing
+              </span>
+            </div>
+            <div className="space-y-2">
+              {evalData.results?.map((r: any) => (
+                <div key={r.eval_id} className="flex items-center justify-between p-3 rounded-xl text-sm"
+                     style={{ background: "var(--bg2)" }}>
+                  <span style={{ color: "var(--text2)" }}>{r.description}</span>
+                  <div className="flex items-center gap-3">
+                    <span style={{ color: "var(--accent)" }}>{r.epistemic_score}/100</span>
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${r.passed ? "text-green-400" : "text-red-400"}`}
+                          style={{ background: r.passed ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)" }}>
+                      {r.passed ? "PASS" : "FAIL"}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Recent analyses */}
+        <div className="card p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-semibold" style={{ color: "var(--text)" }}>Recent analyses</h3>
+            <Link href="/" className="text-xs px-3 py-1.5 rounded-lg text-white accent-gradient">
+              New analysis
+            </Link>
+          </div>
           {data.recent_analyses.length === 0 ? (
-            <p className="text-gray-500 text-sm">
-              No analyses yet.{" "}
-              <Link href="/" className="text-indigo-600 hover:underline">Run your first analysis →</Link>
-            </p>
+            <div className="text-center py-8">
+              <p className="text-sm mb-3" style={{ color: "var(--text2)" }}>No analyses yet</p>
+              <Link href="/" className="text-sm px-4 py-2 rounded-xl text-white accent-gradient inline-block">
+                Run your first analysis →
+              </Link>
+            </div>
           ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-gray-500 border-b">
-                  <th className="pb-2 font-medium">Preview</th>
-                  <th className="pb-2 font-medium">Score</th>
-                  <th className="pb-2 font-medium">Status</th>
-                  <th className="pb-2 font-medium">Date</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.recent_analyses.map((a: any) => (
-                  <tr key={a.id} className="border-b last:border-0">
-                    <td className="py-3 text-gray-700 max-w-xs truncate">{a.content_preview || "—"}</td>
-                    <td className="py-3 font-medium text-indigo-600">{a.overall_score ?? "—"}</td>
-                    <td className="py-3">
-                      <span className="bg-green-100 text-green-700 text-xs px-2 py-0.5 rounded-full">{a.status}</span>
-                    </td>
-                    <td className="py-3 text-gray-400 text-xs">{new Date(a.created_at).toLocaleDateString()}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <div className="space-y-2">
+              {data.recent_analyses.map((a: any) => (
+                <div key={a.id} className="flex items-center justify-between p-3 rounded-xl"
+                     style={{ background: "var(--bg2)" }}>
+                  <span className="text-sm truncate max-w-xs" style={{ color: "var(--text2)" }}>
+                    {a.content_preview || "—"}
+                  </span>
+                  <div className="flex items-center gap-3 flex-shrink-0">
+                    <span className="font-bold text-sm" style={{ color: "var(--accent)" }}>
+                      {a.overall_score ?? "—"}
+                    </span>
+                    <span className="text-xs px-2 py-0.5 rounded-full"
+                          style={{ background: "rgba(34,197,94,0.15)", color: "#22c55e" }}>
+                      {a.status}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
         </div>
       </div>
-    </main>
+    </div>
   );
 }

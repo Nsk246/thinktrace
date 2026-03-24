@@ -1,30 +1,23 @@
 interface ScoreBadgeProps {
   score: number;
   label: string;
+  size?: "sm" | "lg";
 }
 
-export function ScoreBadge({ score, label }: ScoreBadgeProps) {
-  const color =
-    score >= 70
-      ? "bg-green-100 text-green-800 border-green-300"
-      : score >= 40
-      ? "bg-yellow-100 text-yellow-800 border-yellow-300"
-      : "bg-red-100 text-red-800 border-red-300";
-
-  const bar =
-    score >= 70 ? "bg-green-500" : score >= 40 ? "bg-yellow-500" : "bg-red-500";
+export function ScoreBadge({ score, label, size = "sm" }: ScoreBadgeProps) {
+  const color = score >= 70 ? "#22c55e" : score >= 40 ? "#f59e0b" : "#ef4444";
+  const bg = score >= 70 ? "rgba(34,197,94,0.1)" : score >= 40 ? "rgba(245,158,11,0.1)" : "rgba(239,68,68,0.1)";
+  const border = score >= 70 ? "rgba(34,197,94,0.3)" : score >= 40 ? "rgba(245,158,11,0.3)" : "rgba(239,68,68,0.3)";
 
   return (
-    <div className={`rounded-lg border p-4 ${color}`}>
-      <div className="flex justify-between items-center mb-2">
-        <span className="text-sm font-medium">{label}</span>
-        <span className="text-2xl font-bold">{score}</span>
+    <div className="rounded-xl p-4" style={{ background: bg, border: `1px solid ${border}` }}>
+      <div className="flex justify-between items-start mb-3">
+        <span className="text-xs font-medium" style={{ color: "var(--text2)" }}>{label}</span>
+        <span className={`font-bold ${size === "lg" ? "text-4xl" : "text-2xl"}`} style={{ color }}>{score}</span>
       </div>
-      <div className="w-full bg-white bg-opacity-50 rounded-full h-2">
-        <div
-          className={`h-2 rounded-full ${bar} transition-all duration-500`}
-          style={{ width: `${score}%` }}
-        />
+      <div className="w-full rounded-full h-1.5" style={{ background: "var(--border)" }}>
+        <div className="h-1.5 rounded-full transition-all duration-700"
+             style={{ width: `${Math.min(score, 100)}%`, background: color }} />
       </div>
     </div>
   );

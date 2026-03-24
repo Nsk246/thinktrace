@@ -15,11 +15,26 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+export interface ArgumentNode {
+  id: string;
+  text: string;
+  node_type: string;
+}
+
+export interface ArgumentEdge {
+  source_id: string;
+  target_id: string;
+  relation: string;
+}
+
 export interface AnalysisResult {
   status: string;
   analysis_id: string;
   claim_count: number;
-  argument_graph: { nodes: number; edges: number };
+  argument_graph: {
+    nodes: ArgumentNode[];
+    edges: ArgumentEdge[];
+  };
   fallacies: {
     name: string;
     severity: string;
@@ -41,11 +56,21 @@ export interface AnalysisResult {
   };
 }
 
-export const analyzeText = async (content: string): Promise<AnalysisResult> => {
-  const { data } = await api.post("/api/v1/analyze", {
-    content,
-    content_type: "text",
+export const analyzeText = async (content: string, type = "text"): Promise<AnalysisResult> => {
+  const { data } = await api.post("/api/v1/analyze", { content, content_type: type });
+  return data;
+};
+
+export const analyzeFile = async (file: File): Promise<AnalysisResult> => {
+  const form = new FormData();
+  form.append("file", file);
+  const { data } = await api.post("/api/v1/ingest/pdf", form, {
+    headers: { "Content-Type": "multipart/form-data" },
   });
+  if (data.claims) {
+    const text = data.claims.map((c: any) => c.text).join(". ");
+    return analyzeText(text, "text");
+  }
   return data;
 };
 
@@ -54,15 +79,8 @@ export const login = async (email: string, password: string) => {
   return data;
 };
 
-export const register = async (
-  email: string,
-  password: string,
-  full_name: string,
-  org_name: string
-) => {
-  const { data } = await api.post("/api/v1/auth/register", {
-    email, password, full_name, org_name,
-  });
+export const register = async (email: string, password: string, full_name: string, org_name: string) => {
+  const { data } = await api.post("/api/v1/auth/register", { email, password, full_name, org_name });
   return data;
 };
 
