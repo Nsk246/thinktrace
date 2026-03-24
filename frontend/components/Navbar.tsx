@@ -8,6 +8,7 @@ import { useEffect, useState } from "react";
 
 const links = [
   { href: "/", label: "Analyze" },
+  { href: "/compare", label: "Compare" },
   { href: "/dashboard", label: "Dashboard" },
   { href: "/watchdog", label: "Watchdog" },
   { href: "/evals", label: "Evals" },

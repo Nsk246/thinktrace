@@ -4,79 +4,118 @@ from core.config import get_settings
 from core.models import ClaimTree, ArgumentGraph, ArgumentNode, ArgumentEdge
 import json
 import re
+import logging
 
+logger = logging.getLogger(__name__)
 settings = get_settings()
+
 llm = ChatAnthropic(
     model="claude-sonnet-4-20250514",
     api_key=settings.anthropic_api_key,
-    max_tokens=4096,
+    max_tokens=2048,
 )
 
-LOGIC_MAP_PROMPT = """You are an expert logician. Given a list of claims, build an argument graph showing how they logically connect.
+MAPPING_PROMPT = """You are an expert logician. Analyze the logical structure of these claims.
 
-For each connection identify:
-- source_id: the claim ID that supports or relates to the target
-- target_id: the claim ID being supported or contradicted
-- relation: one of "supports" | "contradicts" | "qualifies"
+For each logical relationship between claims:
+1. Identify the relation: "supports", "contradicts", "qualifies", "requires"
+2. Score the validity of that relationship (0.0 to 1.0):
+   - 1.0 = the source claim strongly and directly supports/contradicts the target
+   - 0.7 = moderate support, some logical gap
+   - 0.4 = weak support, significant logical leap
+   - 0.1 = very tenuous connection
+3. Note any weakness in the reasoning chain
+4. Identify missing premises — unstated assumptions required for the argument to work
+5. Flag circular reasoning if present
 
-Rules:
-- premises support conclusions or sub_claims
-- sub_claims support conclusions
-- some premises may contradict each other
-- qualifies means the claim modifies or limits another claim
-- Only create edges where there is a genuine logical relationship
-- Return ONLY valid JSON, no explanation, no markdown
+Claims:
+{claims}
 
-Return this exact structure:
+Return ONLY valid JSON:
 {
   "nodes": [
-    {"id": "claim_id", "text": "claim text", "node_type": "premise|conclusion|sub_claim"}
+    {
+      "id": "claim id",
+      "text": "claim text",
+      "node_type": "premise|conclusion|sub_claim"
+    }
   ],
   "edges": [
-    {"source_id": "id1", "target_id": "id2", "relation": "supports|contradicts|qualifies"}
-  ]
+    {
+      "source_id": "id",
+      "target_id": "id",
+      "relation": "supports|contradicts|qualifies|requires",
+      "validity_score": 0.0-1.0,
+      "weakness_note": "explanation of any logical gap, or null if strong"
+    }
+  ],
+  "missing_premises": [
+    "Unstated assumption required for the argument"
+  ],
+  "has_circular_reasoning": false,
+  "circular_reasoning_note": null
 }"""
 
 
 class LogicMapperAgent:
     def run(self, claim_tree: ClaimTree) -> ArgumentGraph:
-        # Limit to 8 most important claims to keep mapping reliable
         sorted_claims = sorted(
             claim_tree.claims,
-            key=lambda c: 0 if c.claim_type == "conclusion" else (1 if c.claim_type == "sub_claim" else 2)
+            key=lambda c: 0 if c.claim_type == "conclusion"
+                else (1 if c.claim_type == "sub_claim" else 2)
         )[:8]
+
         claims_text = "\n".join([
             f"ID: {c.id} | Type: {c.claim_type} | Text: {c.text}"
             for c in sorted_claims
         ])
 
-        messages = [
-            SystemMessage(content=LOGIC_MAP_PROMPT),
-            HumanMessage(content=f"Build the argument graph for these claims:\n\n{claims_text}"),
-        ]
+        try:
+            response = llm.invoke([
+                SystemMessage(content="You are an expert logician. Return only valid JSON."),
+                HumanMessage(content=MAPPING_PROMPT.format(claims=claims_text)),
+            ])
+            raw = response.content.strip()
+            raw = re.sub(r"^```(?:json)?", "", raw, flags=re.MULTILINE).strip()
+            raw = re.sub(r"```$", "", raw, flags=re.MULTILINE).strip()
+            parsed = json.loads(raw)
 
-        response = llm.invoke(messages)
-        raw = response.content.strip()
-        raw = re.sub(r"^```(?:json)?", "", raw, flags=re.MULTILINE)
-        raw = re.sub(r"```$", "", raw, flags=re.MULTILINE)
-        parsed = json.loads(raw.strip())
+            nodes = [
+                ArgumentNode(
+                    id=n["id"],
+                    text=n["text"],
+                    node_type=n.get("node_type", "premise"),
+                )
+                for n in parsed.get("nodes", [])
+            ]
 
-        nodes = [
-            ArgumentNode(
-                id=n["id"],
-                text=n["text"],
-                node_type=n.get("node_type", "sub_claim"),
-            )
-            for n in parsed.get("nodes", [])
-        ]
+            edges = []
+            for e in parsed.get("edges", []):
+                edge = ArgumentEdge(
+                    source_id=e["source_id"],
+                    target_id=e["target_id"],
+                    relation=e.get("relation", "supports"),
+                )
+                # Store validation metadata
+                edge.__dict__["validity_score"] = e.get("validity_score", 1.0)
+                edge.__dict__["weakness_note"] = e.get("weakness_note", None)
+                edges.append(edge)
 
-        edges = [
-            ArgumentEdge(
-                source_id=e["source_id"],
-                target_id=e["target_id"],
-                relation=e.get("relation", "supports"),
-            )
-            for e in parsed.get("edges", [])
-        ]
+            graph = ArgumentGraph(nodes=nodes, edges=edges)
+            # Store extra analysis on the graph
+            graph.__dict__["missing_premises"] = parsed.get("missing_premises", [])
+            graph.__dict__["has_circular_reasoning"] = parsed.get("has_circular_reasoning", False)
+            graph.__dict__["circular_reasoning_note"] = parsed.get("circular_reasoning_note", None)
 
-        return ArgumentGraph(nodes=nodes, edges=edges)
+            # Log weak edges
+            weak_edges = [e for e in edges if e.__dict__.get("validity_score", 1.0) < 0.5]
+            if weak_edges:
+                logger.info(f"Logic Mapper: {len(weak_edges)} weak reasoning edges detected")
+
+            logger.info(f"Logic Mapper: {len(nodes)} nodes, {len(edges)} edges, "
+                       f"{len(graph.__dict__['missing_premises'])} missing premises")
+            return graph
+
+        except Exception as e:
+            logger.error(f"Logic mapping failed: {e}")
+            return ArgumentGraph(nodes=[], edges=[])

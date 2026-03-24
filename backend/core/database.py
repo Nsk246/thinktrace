@@ -63,6 +63,7 @@ class AnalysisRecord(Base):
     logic_score = Column(Float)
     status = Column(String, default="pending")
     full_result = Column(Text)
+    content_hash = Column(String, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     completed_at = Column(DateTime)
     org = relationship("Organization", back_populates="analyses")

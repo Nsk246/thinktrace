@@ -252,14 +252,70 @@ def gather_evidence(claim: Claim) -> tuple[str, list]:
     return combined, source_names
 
 
+def classify_claim_checkability(text: str) -> str:
+    """Classify whether a claim is factual, opinion, prediction, or ambiguous."""
+    text_lower = text.lower()
+
+    opinion_signals = [
+        "should", "must", "need to", "have to", "ought to",
+        "is destroying", "is bad", "is good", "is wrong", "is right",
+        "better", "worse", "best", "worst", "dangerous", "important",
+        "anyone who", "naive", "obvious", "clearly wrong",
+    ]
+    prediction_signals = [
+        "will", "going to", "soon", "in the future", "eventually",
+        "by 2030", "within years", "could lead to", "may cause",
+    ]
+
+    opinion_count = sum(1 for s in opinion_signals if s in text_lower)
+    prediction_count = sum(1 for s in prediction_signals if s in text_lower)
+
+    if opinion_count >= 2:
+        return "opinion"
+    if prediction_count >= 2:
+        return "prediction"
+    if opinion_count >= 1 and len(text.split()) < 10:
+        return "opinion"
+    return "factual"
+
+
 def fact_check_single_claim(claim: Claim) -> FactCheckResult:
+    # Skip non-checkable claim types
     if claim.claim_type in ("conclusion", "background"):
+        checkability = classify_claim_checkability(claim.text)
+        if checkability == "opinion":
+            return FactCheckResult(
+                claim_id=claim.id,
+                verdict="unverifiable",
+                confidence=0.9,
+                sources=[],
+                explanation="This is a value judgment or opinion — it cannot be fact checked as true or false.",
+            )
         return FactCheckResult(
             claim_id=claim.id,
             verdict="unverifiable",
             confidence=0.5,
             sources=[],
-            explanation="This is a conclusion or background context — direct fact checking is not applicable.",
+            explanation="This is a conclusion — direct fact checking is not applicable.",
+        )
+
+    # Check if the claim is an opinion or prediction before searching
+    checkability = classify_claim_checkability(claim.text)
+    if checkability == "opinion":
+        return FactCheckResult(
+            claim_id=claim.id,
+            verdict="unverifiable",
+            confidence=0.9,
+            sources=[],
+            explanation="This is a value judgment or opinion rather than a verifiable factual claim.",
+        )
+    if checkability == "prediction":
+        return FactCheckResult(
+            claim_id=claim.id,
+            verdict="contested",
+            confidence=0.4,
+            sources=[],
+            explanation="This is a prediction about future events — it can be assessed against expert consensus but not verified as fact.",
         )
 
     is_author_claim = claim.__dict__.get("is_author_claim", True)

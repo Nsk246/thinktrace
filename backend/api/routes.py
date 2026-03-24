@@ -44,11 +44,13 @@ def save_analysis_record(result, request: AnalysisRequest):
             "epistemic_score": result.epistemic_score.model_dump(),
             "content_preview": request.content[:300],
         })
+        from services.cache_service import get_content_hash
         record = AnalysisRecord(
             id=result.id,
             org_id=request.org_id,
             user_id="anonymous",
             job_id=result.id,
+            content_hash=get_content_hash(request.content, request.content_type.value),
             content_type=request.content_type.value,
             content_preview=request.content[:120] if request.content else "",
             claim_count=len(result.claim_tree.claims),
@@ -166,6 +168,14 @@ async def analyze(request: AnalysisRequest):
         raise HTTPException(status_code=400, detail="Content too long. Maximum is 50,000 characters.")
     if len(request.content.strip()) < 10:
         raise HTTPException(status_code=400, detail="Content too short to analyze. Please provide at least a sentence.")
+
+    # Check cache first
+    from services.cache_service import get_cached_analysis, should_use_cache
+    if should_use_cache(request.content):
+        cached = get_cached_analysis(request.content, request.content_type.value)
+        if cached:
+            cached["cached"] = True
+            return cached
 
     try:
         import asyncio
@@ -327,3 +337,123 @@ async def get_public_report(analysis_id: str):
         }
     finally:
         db.close()
+
+
+@router.post("/compare")
+async def compare_arguments(
+    content_a: str,
+    content_b: str,
+    label_a: str = "Argument A",
+    label_b: str = "Argument B",
+):
+    """Compare two arguments and return a structured comparison."""
+    from langchain_anthropic import ChatAnthropic
+    from langchain_core.messages import HumanMessage, SystemMessage
+    from core.config import get_settings
+    import asyncio
+
+    settings = get_settings()
+    llm = ChatAnthropic(
+        model="claude-sonnet-4-20250514",
+        api_key=settings.anthropic_api_key,
+        max_tokens=1500,
+    )
+
+    if len(content_a) > 10000 or len(content_b) > 10000:
+        raise HTTPException(status_code=400, detail="Each argument must be under 10,000 characters for comparison.")
+
+    # Run both analyses in parallel
+    loop = asyncio.get_event_loop()
+    try:
+        request_a = AnalysisRequest(content=content_a, content_type=ContentType.TEXT, org_id="compare")
+        request_b = AnalysisRequest(content=content_b, content_type=ContentType.TEXT, org_id="compare")
+
+        future_a = loop.run_in_executor(None, lambda: _run_analysis(request_a))
+        future_b = loop.run_in_executor(None, lambda: _run_analysis(request_b))
+
+        result_a, result_b = await asyncio.gather(
+            asyncio.wrap_future(future_a),
+            asyncio.wrap_future(future_b),
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
+
+    # Comparator agent
+    comparison_prompt = f"""Compare these two arguments and provide a structured assessment.
+
+{label_a}:
+{content_a[:1000]}
+Score: {result_a["epistemic_score"]["overall_score"]}
+Fallacies: {len(result_a["fallacies"])}
+Verdict: {result_a["epistemic_score"]["summary"]}
+
+{label_b}:
+{content_b[:1000]}
+Score: {result_b["epistemic_score"]["overall_score"]}
+Fallacies: {len(result_b["fallacies"])}
+Verdict: {result_b["epistemic_score"]["summary"]}
+
+Return ONLY valid JSON:
+{{
+  "winner": "{label_a}|{label_b}|tie",
+  "winner_reasoning": "2 sentences explaining why",
+  "evidence_comparison": "1 sentence comparing evidence quality",
+  "logic_comparison": "1 sentence comparing logical structure",
+  "fallacy_comparison": "1 sentence comparing fallacy severity",
+  "key_differences": ["difference 1", "difference 2", "difference 3"]
+}}"""
+
+    try:
+        response = llm.invoke([HumanMessage(content=comparison_prompt)])
+        import re, json
+        raw = response.content.strip()
+        raw = re.sub(r"^```(?:json)?", "", raw, flags=re.MULTILINE).strip()
+        raw = re.sub(r"```$", "", raw, flags=re.MULTILINE).strip()
+        comparison = json.loads(raw)
+    except Exception as e:
+        comparison = {
+            "winner": "tie",
+            "winner_reasoning": "Comparison analysis unavailable.",
+            "evidence_comparison": "",
+            "logic_comparison": "",
+            "fallacy_comparison": "",
+            "key_differences": [],
+        }
+
+    return {
+        "label_a": label_a,
+        "label_b": label_b,
+        "result_a": result_a,
+        "result_b": result_b,
+        "comparison": comparison,
+    }
+
+
+def _run_analysis(request: AnalysisRequest) -> dict:
+    """Helper to run a full analysis and return serializable result."""
+    claim_tree = ingestion_agent.run(
+        content=request.content,
+        content_type=request.content_type,
+    )
+    result = run_full_analysis(claim_tree)
+    return {
+        "analysis_id": result.id,
+        "claim_count": len(result.claim_tree.claims),
+        "argument_graph": {
+            "nodes": [n.model_dump() for n in result.argument_graph.nodes],
+            "edges": [e.model_dump() for e in result.argument_graph.edges],
+        },
+        "fallacies": [
+            {"name": f.name, "severity": f.severity,
+             "confidence": f.__dict__.get("confidence", 0.8),
+             "explanation": f.explanation}
+            for f in result.fallacies
+        ],
+        "fact_checks": [
+            {"claim_id": fc.claim_id, "verdict": fc.verdict,
+             "confidence": fc.confidence, "explanation": fc.explanation,
+             "sources": fc.sources}
+            for fc in result.fact_checks
+        ],
+        "epistemic_score": result.epistemic_score.model_dump(),
+    }

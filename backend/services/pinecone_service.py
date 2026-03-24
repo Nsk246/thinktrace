@@ -4,24 +4,38 @@ from core.config import get_settings
 logger = logging.getLogger(__name__)
 settings = get_settings()
 _index = None
+_embedder = None
 
 
-def get_index():
-    global _index
-    if _index is not None:
-        return _index
+def get_embedder():
+    """Load sentence-transformers model lazily."""
+    global _embedder
+    if _embedder is not None:
+        return _embedder
     try:
-        from pinecone import Pinecone
-        pc = Pinecone(api_key=settings.pinecone_api_key)
-        _index = pc.Index(settings.pinecone_index_name)
-        logger.info("Pinecone connected")
-        return _index
+        from sentence_transformers import SentenceTransformer
+        _embedder = SentenceTransformer("all-MiniLM-L6-v2")
+        logger.info("Sentence transformer loaded: all-MiniLM-L6-v2 (384 dims)")
+        return _embedder
     except Exception as e:
-        logger.warning(f"Pinecone unavailable: {e}")
+        logger.warning(f"Sentence transformer unavailable: {e} — falling back to hash embeddings")
         return None
 
 
 def embed_text(text: str) -> list[float]:
+    """Generate real semantic embeddings, fall back to hash if unavailable."""
+    embedder = get_embedder()
+    if embedder:
+        try:
+            vec = embedder.encode(text[:512], normalize_embeddings=True).tolist()
+            # Pad to 1536 dims if needed (for existing Pinecone index)
+            if len(vec) < 1536:
+                vec = vec + [0.0] * (1536 - len(vec))
+            return vec[:1536]
+        except Exception as e:
+            logger.error(f"Embedding error: {e}")
+
+    # Hash fallback
     import hashlib, math
     hash_val = hashlib.sha256(text.encode()).digest()
     vec = []
@@ -39,13 +53,23 @@ def embed_text(text: str) -> list[float]:
     return [v / norm for v in vec] if norm > 0 else vec
 
 
+def get_index():
+    global _index
+    if _index is not None:
+        return _index
+    try:
+        from pinecone import Pinecone
+        pc = Pinecone(api_key=settings.pinecone_api_key)
+        _index = pc.Index(settings.pinecone_index_name)
+        logger.info("Pinecone connected")
+        return _index
+    except Exception as e:
+        logger.warning(f"Pinecone unavailable: {e}")
+        return None
+
+
 def upsert_analysis(analysis_id: str, org_id: str, user_id: str = "anonymous",
                     text: str = "", metadata: dict = {}):
-    """
-    Store analysis in Pinecone.
-    Uses org_id as namespace for complete tenant isolation.
-    Each org only ever sees its own vectors.
-    """
     index = get_index()
     if not index:
         return False
@@ -63,7 +87,7 @@ def upsert_analysis(analysis_id: str, org_id: str, user_id: str = "anonymous",
                     **{k: str(v) for k, v in metadata.items()},
                 }
             }],
-            namespace=org_id,  # strict org isolation
+            namespace=org_id,
         )
         logger.info(f"Pinecone: upserted {analysis_id} in namespace {org_id}")
         return True
@@ -74,10 +98,6 @@ def upsert_analysis(analysis_id: str, org_id: str, user_id: str = "anonymous",
 
 def search_similar(query: str, org_id: str, user_id: str = None,
                    top_k: int = 3) -> list[dict]:
-    """
-    Search within org namespace only — tenants cannot see each other's data.
-    Optionally filter by user_id.
-    """
     index = get_index()
     if not index:
         return []
@@ -86,13 +106,9 @@ def search_similar(query: str, org_id: str, user_id: str = None,
         filter_dict = {"org_id": {"$eq": org_id}}
         if user_id:
             filter_dict["user_id"] = {"$eq": user_id}
-
         results = index.query(
-            vector=vec,
-            top_k=top_k,
-            namespace=org_id,
-            include_metadata=True,
-            filter=filter_dict,
+            vector=vec, top_k=top_k, namespace=org_id,
+            include_metadata=True, filter=filter_dict,
         )
         return [
             {
@@ -110,13 +126,11 @@ def search_similar(query: str, org_id: str, user_id: str = None,
 
 
 def delete_org_data(org_id: str) -> bool:
-    """Delete all vectors for an org (GDPR compliance / org deletion)."""
     index = get_index()
     if not index:
         return False
     try:
         index.delete(delete_all=True, namespace=org_id)
-        logger.info(f"Pinecone: deleted all vectors for org {org_id}")
         return True
     except Exception as e:
         logger.error(f"Pinecone delete error: {e}")
@@ -124,7 +138,6 @@ def delete_org_data(org_id: str) -> bool:
 
 
 def get_org_stats(org_id: str) -> dict:
-    """Get vector count for a specific org namespace."""
     index = get_index()
     if not index:
         return {"connected": False}

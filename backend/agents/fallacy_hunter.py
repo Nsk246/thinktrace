@@ -48,11 +48,18 @@ Return ONLY valid JSON:
     {{
       "name": "Fallacy Name",
       "severity": "low|medium|high",
+      "confidence": 0.0-1.0,
       "affected_claim_id": "claim id here",
       "explanation": "Specific explanation of why this is a fallacy in the author's reasoning"
     }}
   ]
-}}"""
+}}
+
+Confidence guide:
+- 0.9-1.0: Textbook example, unambiguous
+- 0.7-0.9: Clear fallacy with minor ambiguity
+- 0.5-0.7: Probable fallacy, reasonable person might disagree
+- Below 0.5: Possible fallacy, do not include unless quite sure"""
 
 
 class FallacyHunterAgent:
@@ -95,13 +102,19 @@ class FallacyHunterAgent:
                 if affected_claim and not affected_claim.__dict__.get("is_author_claim", True):
                     logger.info(f"Skipping fallacy on attributed claim: {f.get('name')}")
                     continue
-                fallacies.append(Fallacy(
+                fallacy_obj = Fallacy(
                     name=f.get("name", "Unknown"),
                     severity=f.get("severity", "medium"),
                     affected_claim_id=affected_id,
                     explanation=f.get("explanation", ""),
                     description=f.get("explanation", ""),
-                ))
+                )
+                fallacy_obj.__dict__["confidence"] = f.get("confidence", 0.8)
+                # Skip low confidence fallacies
+                if f.get("confidence", 0.8) >= 0.5:
+                    fallacies.append(fallacy_obj)
+                else:
+                    logger.info(f"Skipping low confidence fallacy: {f.get('name')} ({f.get('confidence', 0)})")
 
             logger.info(f"Detected {len(fallacies)} fallacies (content type: {content_type})")
             return fallacies
