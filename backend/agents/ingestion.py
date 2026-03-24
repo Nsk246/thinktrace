@@ -1,192 +1,226 @@
 from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import HumanMessage, SystemMessage
-from pypdf import PdfReader
-from bs4 import BeautifulSoup
-from youtube_transcript_api import YouTubeTranscriptApi
-import requests
-import re
-import json
-import io
-from typing import Union
 from core.config import get_settings
-from core.models import ClaimTree, Claim, ContentType
+from core.models import Claim, ClaimTree, ContentType
+import uuid
+import json
+import re
+import logging
+import httpx
 
+logger = logging.getLogger(__name__)
 settings = get_settings()
 
 llm = ChatAnthropic(
     model="claude-sonnet-4-20250514",
     api_key=settings.anthropic_api_key,
-    max_tokens=4096,
+    max_tokens=2048,
 )
 
-CLAIM_EXTRACTION_PROMPT = """You are an expert argument analyst. Your job is to extract all distinct claims from the text below.
+CONTENT_TYPE_PROMPT = """Analyze this text and classify it. Return ONLY valid JSON.
 
-For each claim identify:
-- text: the exact claim as stated
-- claim_type: one of "premise" | "conclusion" | "sub_claim"
-- position: approximate character position in the original text (integer)
-- confidence: how clearly it is stated as a claim (0.0 to 1.0)
+DECISION TREE — follow in order:
 
-Rules:
-- A premise is a supporting fact or evidence offered to support a conclusion
-- A conclusion is the main point the author is trying to prove
-- A sub_claim is an intermediate claim that supports the conclusion but needs its own support
-- Extract EVERY distinct claim, even implicit ones
-- Ignore filler sentences, transitions, and purely rhetorical statements
-- Return ONLY valid JSON, no explanation, no markdown
+1. Does the text read like Wikipedia, an encyclopedia, or a textbook? 
+   Neutral tone, describes debates without taking sides, uses third-person?
+   → "encyclopedic"
 
-Return this exact JSON structure:
+2. Does the text primarily describe what OTHER people believe, say, or claim?
+   Uses "X believes", "according to Y", "some argue", "critics say"?
+   → "reporting"
+
+3. Does the text appear to be a scholarly paper, research analysis, or academic essay?
+   Uses citations, examines evidence systematically, hedged language like "suggests", "indicates"?
+   → "academic"
+
+4. Does the text combine BOTH reporting/encyclopedic content AND the author's own direct argument?
+   e.g. "Some say X, but I believe Y" or "Critics argue X, however the evidence shows Y therefore we must Z"
+   → "mixed"
+
+5. Does the text use strong emotional language, attack opponents, use rhetorical calls to action,
+   AND is clearly trying to persuade the reader to adopt a position?
+   e.g. "Anyone who disagrees is naive", "We MUST act now", "This is destroying our society"
+   → "persuasive"
+
+6. Everything else — author makes direct factual claims in a straightforward way
+   → "direct_argument"
+
+Also detect:
+- "has_quotes": true if text contains direct quotes attributed to others
+- "has_attribution": true if text uses phrases like "X believes", "according to Y", "some argue"
+- "is_encyclopedic_style": true if it reads like Wikipedia or a textbook
+
+Return JSON:
+{
+  "content_type": "direct_argument|reporting|encyclopedic|academic|persuasive|mixed",
+  "has_quotes": true|false,
+  "has_attribution": true|false,
+  "is_encyclopedic_style": true|false,
+  "reasoning": "one sentence explaining why"
+}"""
+
+EXTRACTION_PROMPT = """You are an expert argument analyst. Extract all distinct claims from the text.
+
+ATTRIBUTION RULES — these are critical:
+1. If a claim is attributed to someone else ("X believes...", "According to Y...", "Some argue..."), set is_author_claim to false and attributed_to to who holds the claim
+2. If a claim is a direct quote from someone else, set is_author_claim to false
+3. If the text is encyclopedic or journalistic, most claims will have is_author_claim = false
+4. Only set is_author_claim = true when the author is personally asserting the claim
+5. For mixed content, carefully distinguish which claims are the author's own
+
+Claim types:
+- "premise": A supporting fact or evidence
+- "conclusion": The main point being argued
+- "sub_claim": An intermediate claim that supports the conclusion
+- "background": Contextual information, not part of the argument
+- "attribution": A claim attributed to someone else
+
+Extract up to 10 most important claims. Return ONLY valid JSON:
 {
   "claims": [
     {
-      "text": "...",
-      "claim_type": "premise|conclusion|sub_claim",
-      "position": 0,
-      "confidence": 0.95
+      "id": "uuid",
+      "text": "the claim text",
+      "claim_type": "premise|conclusion|sub_claim|background|attribution",
+      "is_author_claim": true|false,
+      "attributed_to": "name or null",
+      "confidence": 0.0-1.0,
+      "position": 0
     }
   ]
 }"""
 
+FALLACY_PROMPT_TEMPLATE = """You are a logical fallacy expert.
 
-def extract_text_from_pdf(pdf_bytes: bytes) -> str:
-    reader = PdfReader(io.BytesIO(pdf_bytes))
-    text = ""
-    for page in reader.pages:
-        text += page.extract_text() + "\n"
-    return text.strip()
+Content context: {content_type_desc}
 
+CRITICAL RULES:
+- Only flag fallacies in claims where is_author_claim is TRUE
+- For attributed claims (is_author_claim = false), only flag if the ATTRIBUTION ITSELF is misleading or the author is misrepresenting what was said
+- For encyclopedic or reporting content, fallacies are rare — only flag if the text itself (not what it describes) contains flawed reasoning
+- Never flag a fallacy just because the described belief is wrong — that is not a fallacy in the text
 
-def extract_text_from_url(url: str) -> str:
-    headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/91.0.4472.124 Safari/537.36"
-        )
-    }
-    response = requests.get(url, headers=headers, timeout=10)
-    response.raise_for_status()
-    soup = BeautifulSoup(response.content, "html.parser")
+Analyze these claims for logical fallacies:
+{claims_text}
 
-    # Remove noise elements
-    for tag in soup(["script", "style", "nav", "footer", "header", "aside"]):
-        tag.decompose()
-
-    # Try to get main content first
-    main = soup.find("main") or soup.find("article") or soup.find("body")
-    text = main.get_text(separator="\n", strip=True) if main else soup.get_text()
-
-    # Clean up whitespace
-    lines = [line.strip() for line in text.splitlines() if line.strip()]
-    return "\n".join(lines)
+Return ONLY valid JSON:
+{{
+  "fallacies": [
+    {{
+      "name": "fallacy name",
+      "severity": "low|medium|high",
+      "affected_claim_id": "claim id",
+      "explanation": "why this is a fallacy in the author's own reasoning"
+    }}
+  ]
+}}"""
 
 
-def extract_youtube_id(url: str) -> str:
-    patterns = [
-        r"(?:v=|\/)([0-9A-Za-z_-]{11}).*",
-        r"(?:embed\/)([0-9A-Za-z_-]{11})",
-        r"(?:youtu\.be\/)([0-9A-Za-z_-]{11})",
-    ]
-    for pattern in patterns:
-        match = re.search(pattern, url)
-        if match:
-            return match.group(1)
-    raise ValueError(f"Could not extract YouTube video ID from URL: {url}")
-
-
-def extract_text_from_youtube(url: str) -> str:
-    video_id = extract_youtube_id(url)
-    transcript_list = YouTubeTranscriptApi.get_transcript(video_id)
-    text = " ".join([entry["text"] for entry in transcript_list])
-    return text.strip()
-
-
-def clean_text(text: str) -> str:
-    # Normalize whitespace
-    text = re.sub(r"\n{3,}", "\n\n", text)
-    text = re.sub(r" {2,}", " ", text)
-    # Remove non-printable characters
-    text = re.sub(r"[^\x20-\x7E\n]", "", text)
-    return text.strip()
-
-
-def extract_claims_with_llm(text: str) -> list[Claim]:
-    # Truncate if too long (Claude handles ~150k tokens but we keep it fast)
-    truncated = text[:12000] if len(text) > 12000 else text
-
-    messages = [
-        SystemMessage(content=CLAIM_EXTRACTION_PROMPT),
-        HumanMessage(content=f"Extract all claims from this text:\n\n{truncated}"),
-    ]
-
-    response = llm.invoke(messages)
-    raw = response.content.strip()
-
-    # Strip markdown code fences if present
-    raw = re.sub(r"^```(?:json)?", "", raw, flags=re.MULTILINE)
-    raw = re.sub(r"```$", "", raw, flags=re.MULTILINE)
-    raw = raw.strip()
-
-    parsed = json.loads(raw)
-    claims = []
-    for i, c in enumerate(parsed.get("claims", [])):
-        claims.append(
-            Claim(
-                text=c["text"],
-                claim_type=c.get("claim_type", "sub_claim"),
-                position=c.get("position", i * 100),
-                confidence=c.get("confidence", 0.8),
-            )
-        )
-    return claims
+def detect_content_type(text: str) -> dict:
+    """Classify the type of content before extraction."""
+    try:
+        response = llm.invoke([
+            SystemMessage(content=CONTENT_TYPE_PROMPT),
+            HumanMessage(content=f"Classify this text:\n\n{text[:2000]}")
+        ])
+        raw = response.content.strip()
+        raw = re.sub(r"^```(?:json)?", "", raw, flags=re.MULTILINE).strip()
+        raw = re.sub(r"```$", "", raw, flags=re.MULTILINE).strip()
+        result = json.loads(raw)
+        logger.info(f"Content type detected: {result.get('content_type')} — {result.get('reasoning','')}")
+        return result
+    except Exception as e:
+        logger.error(f"Content type detection failed: {e}")
+        return {
+            "content_type": "direct_argument",
+            "has_quotes": False,
+            "has_attribution": False,
+            "is_encyclopedic_style": False,
+        }
 
 
 class IngestionAgent:
-    """
-    Accepts any content type and returns a structured ClaimTree.
-    Supports: raw text, PDF bytes, URL, YouTube URL
-    """
-
-    def run(
-        self,
-        content: Union[str, bytes],
-        content_type: ContentType,
-    ) -> ClaimTree:
-        # Step 1: extract raw text based on content type
-        if content_type == ContentType.TEXT:
-            raw_text = content if isinstance(content, str) else content.decode("utf-8")
-
-        elif content_type == ContentType.PDF:
-            if isinstance(content, str):
-                raise ValueError("PDF content must be bytes, not string")
-            raw_text = extract_text_from_pdf(content)
-
+    def run(self, content, content_type: ContentType) -> ClaimTree:
+        if content_type == ContentType.PDF:
+            text = self._extract_pdf(content)
         elif content_type == ContentType.URL:
-            url = content if isinstance(content, str) else content.decode("utf-8")
-            if "youtube.com" in url or "youtu.be" in url:
-                raw_text = extract_text_from_youtube(url)
-                content_type = ContentType.YOUTUBE
-            else:
-                raw_text = extract_text_from_url(url)
-
-        elif content_type == ContentType.YOUTUBE:
-            url = content if isinstance(content, str) else content.decode("utf-8")
-            raw_text = extract_text_from_youtube(url)
-
+            text = self._extract_url(content)
         else:
-            raise ValueError(f"Unsupported content type: {content_type}")
+            text = content if isinstance(content, str) else content.decode("utf-8")
 
-        if not raw_text or len(raw_text.strip()) < 20:
-            raise ValueError("Could not extract meaningful text from the content")
+        # Step 1 — detect content type for context-aware analysis
+        content_meta = detect_content_type(text)
 
-        # Step 2: clean the text
-        clean = clean_text(raw_text)
+        # Step 2 — extract claims with attribution metadata
+        claims = self._extract_claims(text, content_meta)
 
-        # Step 3: extract claims using Claude
-        claims = extract_claims_with_llm(clean)
-
-        return ClaimTree(
+        tree = ClaimTree(
             claims=claims,
-            raw_text=clean,
+            raw_text=text[:500],
             source_type=content_type,
         )
+        # Store content metadata on the tree for downstream agents
+        tree.__dict__["content_meta"] = content_meta
+        return tree
+
+    def _extract_claims(self, text: str, content_meta: dict) -> list[Claim]:
+        context_hint = ""
+        ct = content_meta.get("content_type", "direct_argument")
+        if ct in ("encyclopedic", "reporting"):
+            context_hint = "\nNote: This is {ct} content. Most claims will be attributed to others, not the author."
+        elif ct == "mixed":
+            context_hint = "\nNote: This is mixed content. Carefully distinguish the author's own claims from reported ones."
+
+        try:
+            response = llm.invoke([
+                SystemMessage(content=EXTRACTION_PROMPT + context_hint),
+                HumanMessage(content=f"Extract claims from:\n\n{text[:4000]}")
+            ])
+            raw = response.content.strip()
+            raw = re.sub(r"^```(?:json)?", "", raw, flags=re.MULTILINE).strip()
+            raw = re.sub(r"```$", "", raw, flags=re.MULTILINE).strip()
+            parsed = json.loads(raw)
+
+            claims = []
+            for i, c in enumerate(parsed.get("claims", [])[:10]):
+                claim = Claim(
+                    id=c.get("id", str(uuid.uuid4())),
+                    text=c.get("text", ""),
+                    claim_type=c.get("claim_type", "premise"),
+                    confidence=c.get("confidence", 0.8),
+                    position=i,
+                )
+                # Store attribution metadata
+                claim.__dict__["is_author_claim"] = c.get("is_author_claim", True)
+                claim.__dict__["attributed_to"] = c.get("attributed_to", None)
+                claims.append(claim)
+
+            logger.info(f"Extracted {len(claims)} claims ({sum(1 for c in claims if c.__dict__.get('is_author_claim', True))} author claims)")
+            return claims
+
+        except Exception as e:
+            logger.error(f"Claim extraction failed: {e}")
+            return [Claim(id=str(uuid.uuid4()), text=text[:200], claim_type="premise", confidence=0.5, position=0)]
+
+    def _extract_pdf(self, content: bytes) -> str:
+        try:
+            from pypdf import PdfReader
+            import io
+            reader = PdfReader(io.BytesIO(content))
+            return " ".join(page.extract_text() or "" for page in reader.pages[:10])
+        except Exception as e:
+            logger.error(f"PDF extraction failed: {e}")
+            return ""
+
+    def _extract_url(self, url: str) -> str:
+        try:
+            headers = {"User-Agent": "Mozilla/5.0 ThinkTrace/1.0"}
+            resp = httpx.get(url, headers=headers, timeout=15, follow_redirects=True)
+            from bs4 import BeautifulSoup
+            soup = BeautifulSoup(resp.text, "html.parser")
+            for tag in soup(["script", "style", "nav", "footer", "header"]):
+                tag.decompose()
+            return " ".join(soup.get_text().split())[:5000]
+        except Exception as e:
+            logger.error(f"URL extraction failed: {e}")
+            return url

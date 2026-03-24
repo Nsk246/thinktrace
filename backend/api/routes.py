@@ -103,8 +103,14 @@ async def ingest_text(request: AnalysisRequest):
             "claim_count": len(claim_tree.claims),
             "claims": [c.model_dump() for c in claim_tree.claims],
         }
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Analysis failed: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail="Analysis failed. This may be due to a temporary issue with the AI service. Please try again."
+        )
 
 
 @router.post("/ingest/url")
@@ -117,8 +123,14 @@ async def ingest_url(url: str):
             "claim_count": len(claim_tree.claims),
             "claims": [c.model_dump() for c in claim_tree.claims],
         }
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Analysis failed: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail="Analysis failed. This may be due to a temporary issue with the AI service. Please try again."
+        )
 
 
 @router.post("/ingest/pdf")
@@ -135,18 +147,47 @@ async def ingest_pdf(file: UploadFile = File(...)):
             "claim_count": len(claim_tree.claims),
             "claims": [c.model_dump() for c in claim_tree.claims],
         }
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Analysis failed: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail="Analysis failed. This may be due to a temporary issue with the AI service. Please try again."
+        )
 
 
 @router.post("/analyze")
 async def analyze(request: AnalysisRequest):
+    # Input validation
+    if not request.content or not request.content.strip():
+        raise HTTPException(status_code=400, detail="Content cannot be empty")
+    if len(request.content) > 50000:
+        raise HTTPException(status_code=400, detail="Content too long. Maximum is 50,000 characters.")
+    if len(request.content.strip()) < 10:
+        raise HTTPException(status_code=400, detail="Content too short to analyze. Please provide at least a sentence.")
+
     try:
-        claim_tree = ingestion_agent.run(
-            content=request.content,
-            content_type=request.content_type,
-        )
-        result = run_full_analysis(claim_tree)
+        import asyncio
+        loop = asyncio.get_event_loop()
+        # Run analysis with 120 second timeout
+        try:
+            claim_tree = await asyncio.wait_for(
+                loop.run_in_executor(None, lambda: ingestion_agent.run(
+                    content=request.content,
+                    content_type=request.content_type,
+                )),
+                timeout=120.0
+            )
+            result = await asyncio.wait_for(
+                loop.run_in_executor(None, lambda: run_full_analysis(claim_tree)),
+                timeout=120.0
+            )
+        except asyncio.TimeoutError:
+            raise HTTPException(
+                status_code=408,
+                detail="Analysis timed out after 120 seconds. Try with shorter content."
+            )
         save_analysis_record(result, request)
         return {
             "status": result.status,
@@ -177,8 +218,14 @@ async def analyze(request: AnalysisRequest):
             ],
             "epistemic_score": result.epistemic_score.model_dump(),
         }
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Analysis failed: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail="Analysis failed. This may be due to a temporary issue with the AI service. Please try again."
+        )
 
 
 @router.post("/analyze/async")
@@ -214,8 +261,14 @@ async def get_job_status(job_id: str):
             return {"job_id": job_id, "status": "failed", "error": str(task_result.info)}
         else:
             return {"job_id": job_id, "status": state.lower()}
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Analysis failed: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail="Analysis failed. This may be due to a temporary issue with the AI service. Please try again."
+        )
 
 
 @router.get("/jobs")

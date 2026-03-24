@@ -4,65 +4,108 @@ from core.config import get_settings
 from core.models import ClaimTree, Fallacy
 import json
 import re
+import logging
 
+logger = logging.getLogger(__name__)
 settings = get_settings()
+
 llm = ChatAnthropic(
     model="claude-sonnet-4-20250514",
     api_key=settings.anthropic_api_key,
-    max_tokens=4096,
+    max_tokens=1024,
 )
 
-FALLACY_PROMPT = """You are an expert in logic and argumentation. Detect ALL logical fallacies in the given claims.
+CONTENT_TYPE_DESCRIPTIONS = {
+    "direct_argument": "The author is personally making these claims.",
+    "reporting": "The author is reporting what others believe or said — fallacies belong to the reported parties, not the author.",
+    "encyclopedic": "This is encyclopedic or reference content — fallacies are rare and only apply to the text's own framing.",
+    "academic": "This is analytical text — fallacies apply to the author's analytical claims only.",
+    "persuasive": "This is persuasive content — apply full fallacy detection to the author's claims.",
+    "mixed": "This is mixed content — only flag fallacies in the author's own claims, not in attributed or reported content.",
+}
 
-For each fallacy found:
-- name: the precise name of the fallacy (e.g. "Ad Hominem", "Straw Man", "False Dichotomy", "Appeal to Authority", "Slippery Slope", "Hasty Generalization", "Circular Reasoning", "Appeal to Emotion", "Red Herring", "False Cause")
-- description: one sentence defining this fallacy type
-- affected_claim_id: the ID of the claim containing the fallacy
-- severity: "low" | "medium" | "high" based on how much it undermines the argument
-- explanation: exactly why this specific claim commits this fallacy
+FALLACY_PROMPT = """You are a logical fallacy expert analyzing an argument.
 
-If no fallacies are found return an empty list.
-Return ONLY valid JSON, no explanation, no markdown.
+Content context: {context}
 
-Return this exact structure:
-{
+RULES:
+- ONLY flag fallacies in claims where is_author_claim is TRUE
+- NEVER flag a fallacy just because the belief being described is wrong or fringe
+- For reporting/encyclopedic content, only flag if the text's OWN framing or structure contains flawed reasoning
+- For quoted or attributed claims, only flag if the author misrepresents what was said
+- A text accurately describing a conspiracy theory is NOT committing a fallacy
+
+Common fallacies to detect: Ad Hominem, Straw Man, False Cause, Appeal to Authority (misuse),
+Hasty Generalization, False Dichotomy, Slippery Slope, Circular Reasoning, Appeal to Emotion,
+Bandwagon, Red Herring, Appeal to Ignorance, Loaded Question, No True Scotsman.
+
+Claims to analyze:
+{claims}
+
+Return ONLY valid JSON:
+{{
   "fallacies": [
-    {
+    {{
       "name": "Fallacy Name",
-      "description": "Definition of this fallacy",
-      "affected_claim_id": "claim_id_here",
       "severity": "low|medium|high",
-      "explanation": "Why this specific claim commits this fallacy"
-    }
+      "affected_claim_id": "claim id here",
+      "explanation": "Specific explanation of why this is a fallacy in the author's reasoning"
+    }}
   ]
-}"""
+}}"""
 
 
 class FallacyHunterAgent:
     def run(self, claim_tree: ClaimTree) -> list[Fallacy]:
-        claims_text = "\n".join([
-            f"ID: {c.id} | Type: {c.claim_type} | Text: {c.text}"
-            for c in claim_tree.claims
-        ])
+        content_meta = claim_tree.__dict__.get("content_meta", {})
+        content_type = content_meta.get("content_type", "direct_argument")
+        context = CONTENT_TYPE_DESCRIPTIONS.get(content_type, CONTENT_TYPE_DESCRIPTIONS["direct_argument"])
 
-        messages = [
-            SystemMessage(content=FALLACY_PROMPT),
-            HumanMessage(content=f"Detect all logical fallacies in these claims:\n\n{claims_text}"),
-        ]
-
-        response = llm.invoke(messages)
-        raw = response.content.strip()
-        raw = re.sub(r"^```(?:json)?", "", raw, flags=re.MULTILINE)
-        raw = re.sub(r"```$", "", raw, flags=re.MULTILINE)
-        parsed = json.loads(raw.strip())
-
-        return [
-            Fallacy(
-                name=f["name"],
-                description=f["description"],
-                affected_claim_id=f["affected_claim_id"],
-                severity=f.get("severity", "medium"),
-                explanation=f["explanation"],
+        # Build claims text with attribution info
+        claims_text = []
+        for c in claim_tree.claims:
+            is_author = c.__dict__.get("is_author_claim", True)
+            attributed_to = c.__dict__.get("attributed_to", None)
+            attribution_note = ""
+            if not is_author and attributed_to:
+                attribution_note = f" [ATTRIBUTED TO: {attributed_to} — not author's claim]"
+            elif not is_author:
+                attribution_note = " [REPORTED/ATTRIBUTED — not author's own claim]"
+            claims_text.append(
+                f"ID: {c.id} | is_author_claim: {is_author} | type: {c.claim_type}{attribution_note}\nText: {c.text}"
             )
-            for f in parsed.get("fallacies", [])
-        ]
+
+        prompt = FALLACY_PROMPT.format(
+            context=context,
+            claims="\n\n".join(claims_text),
+        )
+
+        try:
+            response = llm.invoke([HumanMessage(content=prompt)])
+            raw = response.content.strip()
+            raw = re.sub(r"^```(?:json)?", "", raw, flags=re.MULTILINE).strip()
+            raw = re.sub(r"```$", "", raw, flags=re.MULTILINE).strip()
+            parsed = json.loads(raw)
+
+            fallacies = []
+            for f in parsed.get("fallacies", []):
+                # Extra safety — verify the affected claim is actually an author claim
+                affected_id = f.get("affected_claim_id", "")
+                affected_claim = next((c for c in claim_tree.claims if c.id == affected_id), None)
+                if affected_claim and not affected_claim.__dict__.get("is_author_claim", True):
+                    logger.info(f"Skipping fallacy on attributed claim: {f.get('name')}")
+                    continue
+                fallacies.append(Fallacy(
+                    name=f.get("name", "Unknown"),
+                    severity=f.get("severity", "medium"),
+                    affected_claim_id=affected_id,
+                    explanation=f.get("explanation", ""),
+                    description=f.get("explanation", ""),
+                ))
+
+            logger.info(f"Detected {len(fallacies)} fallacies (content type: {content_type})")
+            return fallacies
+
+        except Exception as e:
+            logger.error(f"Fallacy detection failed: {e}")
+            return []

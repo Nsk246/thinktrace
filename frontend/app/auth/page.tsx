@@ -22,7 +22,22 @@ export default function AuthPage() {
       setAuth(data.access_token, { user_id: data.user_id, org_id: data.org_id, role: data.role });
       router.push("/");
     } catch (e: any) {
-      setError(e?.response?.data?.detail || "Authentication failed");
+      const detail = e?.response?.data?.detail;
+      const status = e?.response?.status;
+      if (status === 400) {
+        setError(detail || "Invalid details. Please check your input.");
+      } else if (status === 401) {
+        setError("Incorrect email or password. Please try again.");
+      } else if (status === 422) {
+        const errors = e?.response?.data?.detail;
+        if (Array.isArray(errors)) {
+          setError(errors.map((err: any) => err.msg).join(". "));
+        } else {
+          setError(detail || "Please check your input and try again.");
+        }
+      } else {
+        setError(detail || "Something went wrong. Please try again.");
+      }
     } finally { setLoading(false); }
   };
 
@@ -87,6 +102,24 @@ export default function AuthPage() {
             {mode === "register" && inp("Organisation name", "org_name")}
             {inp("Email address", "email", "email")}
             {inp("Password", "password", "password")}
+            {mode === "register" && form.password.length > 0 && (
+              <div style={{ display: "flex", gap: 6, marginBottom: 10, flexWrap: "wrap" }}>
+                {[
+                  { label: "8+ chars", ok: form.password.length >= 8 },
+                  { label: "Uppercase", ok: /[A-Z]/.test(form.password) },
+                  { label: "Number", ok: /[0-9]/.test(form.password) },
+                ].map(r => (
+                  <span key={r.label} style={{
+                    fontSize: 11, padding: "2px 8px", borderRadius: 100,
+                    background: r.ok ? "rgba(34,197,94,0.12)" : "rgba(113,113,122,0.1)",
+                    color: r.ok ? "#22c55e" : "var(--text4)",
+                    fontWeight: 500,
+                  }}>
+                    {r.ok ? "✓" : "○"} {r.label}
+                  </span>
+                ))}
+              </div>
+            )}
 
             {error && (
               <div style={{

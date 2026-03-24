@@ -18,15 +18,17 @@ llm = ChatAnthropic(
 
 FACT_CHECK_PROMPT = """You are a rigorous fact-checker. You have been given a claim and evidence from multiple sources.
 
-Based on all the evidence, evaluate the claim:
+CONTEXT RULES:
+- If is_author_claim is FALSE: verify whether the attribution is accurate (did X really say/believe this?)
+- If is_author_claim is TRUE: verify whether the claim itself is factually accurate
+- For encyclopedic content describing a fringe theory: verify if the description is accurate, not whether the theory is true
+- Never mark something "contradicted" just because it describes a wrong belief accurately
+
+Based on all the evidence, evaluate:
 - verdict: "supported" | "contradicted" | "unverifiable" | "contested"
-  - supported: evidence clearly backs the claim
-  - contradicted: evidence clearly refutes the claim
-  - contested: sources genuinely disagree
-  - unverifiable: insufficient evidence found
 - confidence: 0.0 to 1.0
 - sources: list of up to 3 source names or URLs
-- explanation: 2-3 sentences explaining your verdict based on the evidence
+- explanation: 2-3 sentences in context of whether this is an author claim or attribution
 
 Return ONLY valid JSON:
 {
@@ -251,21 +253,34 @@ def gather_evidence(claim: Claim) -> tuple[str, list]:
 
 
 def fact_check_single_claim(claim: Claim) -> FactCheckResult:
-    if claim.claim_type == "conclusion":
+    if claim.claim_type in ("conclusion", "background"):
         return FactCheckResult(
             claim_id=claim.id,
             verdict="unverifiable",
             confidence=0.5,
             sources=[],
-            explanation="This is a conclusion or opinion — fact checking is not applicable.",
+            explanation="This is a conclusion or background context — direct fact checking is not applicable.",
         )
 
+    is_author_claim = claim.__dict__.get("is_author_claim", True)
+    attributed_to = claim.__dict__.get("attributed_to", None)
+
     evidence, source_names = gather_evidence(claim)
+
+    # Build context-aware prompt
+    if not is_author_claim and attributed_to:
+        check_instruction = f"This claim is attributed to {attributed_to}. Verify: did {attributed_to} actually hold or express this view?"
+    elif not is_author_claim:
+        check_instruction = "This claim is reported/attributed — verify whether the attribution is accurate."
+    else:
+        check_instruction = "This is the author's own claim. Verify whether it is factually accurate."
 
     messages = [
         SystemMessage(content=FACT_CHECK_PROMPT),
         HumanMessage(content=(
-            f"Claim to fact-check: {claim.text}\n\n"
+            f"Context: {check_instruction}\n"
+            f"is_author_claim: {is_author_claim}\n"
+            f"Claim: {claim.text}\n\n"
             f"Evidence from {len(source_names)} sources ({', '.join(source_names)}):\n{evidence}"
         )),
     ]

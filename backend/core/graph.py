@@ -120,6 +120,23 @@ def build_analysis_graph():
 analysis_graph = build_analysis_graph()
 
 
+def run_with_retry(fn, *args, max_retries=2, **kwargs):
+    """Run a function with retry logic — catches transient failures."""
+    last_error = None
+    for attempt in range(max_retries + 1):
+        try:
+            return fn(*args, **kwargs)
+        except Exception as e:
+            last_error = e
+            if attempt < max_retries:
+                import time
+                time.sleep(2 ** attempt)  # exponential backoff: 1s, 2s
+                logging.getLogger(__name__).warning(
+                    f"Attempt {attempt + 1} failed: {e}. Retrying..."
+                )
+    raise last_error
+
+
 def run_full_analysis(claim_tree: ClaimTree) -> AnalysisResult:
     initial_state: AnalysisState = {
         "claim_tree": claim_tree,
