@@ -69,11 +69,13 @@ ATTRIBUTION RULES — these are critical:
 5. For mixed content, carefully distinguish which claims are the author's own
 
 Claim types:
-- "premise": A supporting fact or evidence
-- "conclusion": The main point being argued
+- "premise": A supporting fact, evidence, or verifiable factual claim — use this for most claims
+- "conclusion": The main point being argued or the final recommendation
 - "sub_claim": An intermediate claim that supports the conclusion
-- "background": Contextual information, not part of the argument
-- "attribution": A claim attributed to someone else
+- "background": ONLY use for truly neutral scene-setting with no factual content (e.g. "this essay discusses X") — do NOT use for verifiable facts about people, events, or the world
+- "attribution": A claim explicitly attributed to someone else using "X says/believes/claims"
+
+CRITICAL: Factual statements like "X is the president of Y", "Z has a population of N", "A caused B" are PREMISES not background. Only use background for meta-commentary about the text itself.
 
 Extract up to 10 most important claims. Return ONLY valid JSON:
 {
