@@ -53,13 +53,13 @@ const useCases = [
 
 const techStack = [
   { category: "AI Orchestration", items: ["LangGraph", "LangChain", "LangSmith"] },
-  { category: "LLM and Agents", items: ["Claude API", "Multi-agent", "Tool-use"] },
-  { category: "Async and Queue", items: ["Celery", "Redis", "Upstash"] },
-  { category: "Vector and Memory", items: ["Pinecone", "Neo4j", "RAG"] },
-  { category: "Backend", items: ["FastAPI", "SQLAlchemy", "JWT Auth"] },
-  { category: "Frontend", items: ["Next.js", "TypeScript", "Tailwind"] },
-  { category: "Infrastructure", items: ["Docker", "AWS ECS", "GitHub Actions"] },
-  { category: "Monitoring", items: ["LangSmith", "CloudWatch", "APScheduler"] },
+  { category: "LLM and Agents", items: ["Claude API", "Multi-agent pipeline", "Tool-use agents"] },
+  { category: "Async and Queue", items: ["Celery workers", "Redis streams", "Upstash cloud"] },
+  { category: "Data and Memory", items: ["SQLAlchemy ORM", "Neo4j graph", "Pinecone vectors"] },
+  { category: "Fact Checking", items: ["Serper Search", "Wikipedia API", "ArXiv + PubMed"] },
+  { category: "Backend", items: ["FastAPI", "JWT Auth", "Multi-tenant orgs"] },
+  { category: "Frontend", items: ["Next.js 14", "TypeScript", "Tailwind CSS"] },
+  { category: "Infrastructure", items: ["Docker", "GitHub Actions CI", "Render deploy"] },
 ];
 
 export default function Home() {
@@ -517,8 +517,8 @@ export default function Home() {
               { label: "Agents", value: "6" },
               { label: "API endpoints", value: "18+" },
               { label: "Eval pass rate", value: "100%" },
+              { label: "Fact sources", value: "5" },
               { label: "CI/CD", value: "GitHub Actions" },
-              { label: "Deploy", value: "AWS ECS" },
             ].map(s => (
               <div key={s.label} style={{ textAlign: "center" }}>
                 <div style={{ fontSize: 22, fontWeight: 800, color: "#6366f1", letterSpacing: "-0.5px" }}>{s.value}</div>

@@ -14,7 +14,11 @@ ingestion_agent = IngestionAgent()
 
 
 def save_analysis_record(result, request: AnalysisRequest):
-    """Save analysis to DB using its own session to avoid threading conflicts."""
+    """Save analysis to SQLite, Pinecone, and Neo4j."""
+    from services.pinecone_service import upsert_analysis
+    from core.memory import knowledge_graph
+
+    # 1 — SQLite (primary store)
     db = SessionLocal()
     try:
         record = AnalysisRecord(
@@ -31,12 +35,35 @@ def save_analysis_record(result, request: AnalysisRequest):
         )
         db.add(record)
         db.commit()
-        logger.info(f"Saved analysis {result.id} for org {request.org_id}")
+        logger.info(f"SQLite: saved analysis {result.id} for org {request.org_id}")
     except Exception as e:
-        logger.error(f"Failed to save analysis: {e}")
+        logger.error(f"SQLite save failed: {e}")
         db.rollback()
     finally:
         db.close()
+
+    # 2 — Pinecone (semantic search)
+    try:
+        claims_text = " ".join([c.text for c in result.claim_tree.claims])
+        upsert_analysis(
+            analysis_id=result.id,
+            org_id=request.org_id,
+            user_id="anonymous",
+            text=request.content[:500],
+            metadata={
+                "overall_score": str(result.epistemic_score.overall_score),
+                "fallacy_count": str(len(result.fallacies)),
+                "claim_count": str(len(result.claim_tree.claims)),
+            }
+        )
+    except Exception as e:
+        logger.error(f"Pinecone save failed: {e}")
+
+    # 3 — Neo4j (knowledge graph)
+    try:
+        knowledge_graph.store_analysis(result, request.org_id)
+    except Exception as e:
+        logger.error(f"Neo4j save failed: {e}")
 
 
 @router.post("/ingest/text")
@@ -177,3 +204,11 @@ async def list_jobs():
         }
     except Exception as e:
         return {"queue": "offline", "error": str(e)}
+
+
+@router.get("/analyses/similar")
+async def find_similar(query: str, org_id: str = "default", top_k: int = 3):
+    """Find semantically similar past analyses using Pinecone."""
+    from services.pinecone_service import search_similar
+    results = search_similar(query=query, org_id=org_id, top_k=top_k)
+    return {"query": query, "similar_analyses": results}
