@@ -86,7 +86,6 @@ def run_epistemic_scorer(state: AnalysisState) -> AnalysisState:
     try:
         score = epistemic_scorer.run(
             claim_tree=state["claim_tree"],
-            argument_graph=state["argument_graph"],
             fallacies=state["fallacies"],
             fact_checks=state["fact_checks"],
         )
