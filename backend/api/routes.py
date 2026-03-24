@@ -19,9 +19,33 @@ def save_analysis_record(result, request: AnalysisRequest):
     from core.memory import knowledge_graph
 
     # 1 — SQLite (primary store)
+    import json as _json
     db = SessionLocal()
     try:
+        full_result_json = _json.dumps({
+            "analysis_id": result.id,
+            "claim_count": len(result.claim_tree.claims),
+            "claims": [c.model_dump() for c in result.claim_tree.claims],
+            "argument_graph": {
+                "nodes": [n.model_dump() for n in result.argument_graph.nodes],
+                "edges": [e.model_dump() for e in result.argument_graph.edges],
+            },
+            "fallacies": [
+                {"name": f.name, "severity": f.severity,
+                 "affected_claim": f.affected_claim_id, "explanation": f.explanation}
+                for f in result.fallacies
+            ],
+            "fact_checks": [
+                {"claim_id": fc.claim_id, "verdict": fc.verdict,
+                 "confidence": fc.confidence, "explanation": fc.explanation,
+                 "sources": fc.sources}
+                for fc in result.fact_checks
+            ],
+            "epistemic_score": result.epistemic_score.model_dump(),
+            "content_preview": request.content[:300],
+        })
         record = AnalysisRecord(
+            id=result.id,
             org_id=request.org_id,
             user_id="anonymous",
             job_id=result.id,
@@ -30,6 +54,9 @@ def save_analysis_record(result, request: AnalysisRequest):
             claim_count=len(result.claim_tree.claims),
             fallacy_count=len(result.fallacies),
             overall_score=result.epistemic_score.overall_score,
+            evidence_score=result.epistemic_score.evidence_score,
+            logic_score=result.epistemic_score.logic_score,
+            full_result=full_result_json,
             status="complete",
             completed_at=datetime.utcnow(),
         )
@@ -212,3 +239,38 @@ async def find_similar(query: str, org_id: str = "default", top_k: int = 3):
     from services.pinecone_service import search_similar
     results = search_similar(query=query, org_id=org_id, top_k=top_k)
     return {"query": query, "similar_analyses": results}
+
+
+@router.get("/reports/{analysis_id}")
+async def get_public_report(analysis_id: str):
+    """
+    Public endpoint — no auth required.
+    Returns full analysis result for shareable report page.
+    """
+    import json as _json
+    db = SessionLocal()
+    try:
+        # Search by primary id first, then by job_id (LangGraph result id)
+        record = db.query(AnalysisRecord).filter(
+            AnalysisRecord.id == analysis_id
+        ).first()
+        if not record:
+            record = db.query(AnalysisRecord).filter(
+                AnalysisRecord.job_id == analysis_id
+            ).first()
+        if not record:
+            raise HTTPException(status_code=404, detail=f"Report {analysis_id} not found. It may be from a previous session.")
+        if not record.full_result:
+            raise HTTPException(status_code=404, detail="Report exists but full data was not saved. Re-run the analysis.")
+        result = _json.loads(record.full_result)
+        return {
+            "analysis_id": analysis_id,
+            "created_at": record.created_at.isoformat(),
+            "content_type": record.content_type,
+            "overall_score": record.overall_score,
+            "evidence_score": record.evidence_score,
+            "logic_score": record.logic_score,
+            **result,
+        }
+    finally:
+        db.close()

@@ -72,6 +72,8 @@ export default function Home() {
   const [error, setError] = useState("");
   const [resultTab, setResultTab] = useState<ResultTab>("fallacies");
   const [activeAgent, setActiveAgent] = useState(-1);
+  const [analysisId, setAnalysisId] = useState<string | null>(null);
+  const [shareCopied, setShareCopied] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const resultsRef = useRef<HTMLDivElement>(null);
   const timerRef = useRef<NodeJS.Timeout[]>([]);
@@ -100,6 +102,7 @@ export default function Home() {
         : tab === "url" ? await analyzeText(url, "url")
         : await analyzeText(content, "text");
       setResult(data);
+      setAnalysisId(data.analysis_id);
       setResultTab("fallacies");
       setTimeout(() => resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 100);
     } catch (e: any) {
@@ -366,6 +369,36 @@ export default function Home() {
                   </div>
                 ))}
               </div>
+              {analysisId && (
+                <div style={{ marginTop: 16, paddingTop: 16, borderTop: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                  <span style={{ fontSize: 12, color: "var(--text3)" }}>
+                    Share this report:
+                  </span>
+                  <code style={{ fontSize: 11, color: "var(--text2)", background: "var(--bg3)", padding: "4px 10px", borderRadius: 6, border: "1px solid var(--border)" }}>
+                    /report/{analysisId.slice(0, 8)}...
+                  </code>
+                  <button
+                    onClick={() => {
+                      const url = `${window.location.origin}/report/${analysisId}`;
+                      navigator.clipboard.writeText(url);
+                      setShareCopied(true);
+                      setTimeout(() => setShareCopied(false), 2000);
+                    }}
+                    style={{
+                      fontSize: 12, fontWeight: 600, padding: "6px 14px", borderRadius: 8,
+                      border: "none",
+                      background: shareCopied ? "rgba(34,197,94,0.15)" : "linear-gradient(135deg,#6366f1,#0ea5e9)",
+                      color: shareCopied ? "#22c55e" : "#fff",
+                      cursor: "pointer", transition: "all 0.2s",
+                    }}>
+                    {shareCopied ? "Link copied!" : "Copy shareable link"}
+                  </button>
+                  <a href={`/report/${analysisId}`} target="_blank" rel="noopener noreferrer"
+                     style={{ fontSize: 12, color: "#818cf8", textDecoration: "none", fontWeight: 500 }}>
+                    Open report →
+                  </a>
+                </div>
+              )}
             </div>
 
             <div className="card" style={{ overflow: "hidden" }}>
