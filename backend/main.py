@@ -2,8 +2,11 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from core.config import get_settings
+from core.database import create_tables
 from api.routes import router
 from api.watchdog_routes import router as watchdog_router
+from api.auth import router as auth_router
+from api.org_routes import router as org_router
 from agents.watchdog import watchdog
 import logging
 
@@ -16,6 +19,8 @@ settings = get_settings()
 async def lifespan(app: FastAPI):
     logger.info("ThinkTrace starting up...")
     logger.info(f"Environment: {settings.app_env}")
+    create_tables()
+    logger.info("Database tables created")
     logger.info("Watchdog scheduler started")
     yield
     logger.info("ThinkTrace shutting down...")
@@ -37,6 +42,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth_router)
+app.include_router(org_router)
 app.include_router(router)
 app.include_router(watchdog_router)
 
