@@ -22,8 +22,9 @@ class KnowledgeGraphService:
                 uri,
                 auth=(settings.neo4j_user, settings.neo4j_password),
                 max_connection_lifetime=3600,
-                max_connection_pool_size=10,
+                max_connection_pool_size=5,
                 connection_acquisition_timeout=30,
+                keep_alive=True,
             )
             self._driver.verify_connectivity()
             logger.info(f"Knowledge graph: connected to Neo4j at {uri}")

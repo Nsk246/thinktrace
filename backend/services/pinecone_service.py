@@ -8,14 +8,20 @@ _embedder = None
 
 
 def get_embedder():
-    """Load sentence-transformers model lazily."""
+    """Load sentence-transformers model from local cache — no network calls."""
     global _embedder
     if _embedder is not None:
         return _embedder
     try:
         from sentence_transformers import SentenceTransformer
-        _embedder = SentenceTransformer("all-MiniLM-L6-v2")
-        logger.info("Sentence transformer loaded: all-MiniLM-L6-v2 (384 dims)")
+        import os
+        # Use local cache — never hit HuggingFace network during inference
+        cache_dir = os.path.join(os.path.dirname(__file__), "..", "models")
+        cache_dir = os.path.abspath(cache_dir)
+        os.environ["TRANSFORMERS_OFFLINE"] = "1"
+        os.environ["HF_DATASETS_OFFLINE"] = "1"
+        _embedder = SentenceTransformer("all-MiniLM-L6-v2", cache_folder=cache_dir)
+        logger.info(f"Sentence transformer loaded from local cache: {cache_dir}")
         return _embedder
     except Exception as e:
         logger.warning(f"Sentence transformer unavailable: {e} — falling back to hash embeddings")
