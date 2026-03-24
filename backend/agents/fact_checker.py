@@ -1,32 +1,34 @@
 from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_community.tools import DuckDuckGoSearchRun
 from core.config import get_settings
 from core.models import ClaimTree, FactCheckResult, Claim
+import requests
 import json
 import re
+import logging
 
+logger = logging.getLogger(__name__)
 settings = get_settings()
+
 llm = ChatAnthropic(
     model="claude-sonnet-4-20250514",
     api_key=settings.anthropic_api_key,
-    max_tokens=4096,
+    max_tokens=1024,
 )
-search = DuckDuckGoSearchRun(backend='auto')
 
-FACT_CHECK_PROMPT = """You are a rigorous fact-checker. You have been given a claim and search results related to it.
+FACT_CHECK_PROMPT = """You are a rigorous fact-checker. You have been given a claim and evidence from multiple sources.
 
-Based on the search results, evaluate the claim:
+Based on all the evidence, evaluate the claim:
 - verdict: "supported" | "contradicted" | "unverifiable" | "contested"
-  - supported: search results clearly back the claim
-  - contradicted: search results clearly refute the claim
-  - contested: search results show genuine disagreement among sources
-  - unverifiable: not enough evidence found to make a determination
-- confidence: 0.0 to 1.0 how confident you are in your verdict
-- sources: list of up to 3 relevant URLs or source names from the search results
+  - supported: evidence clearly backs the claim
+  - contradicted: evidence clearly refutes the claim
+  - contested: sources genuinely disagree
+  - unverifiable: insufficient evidence found
+- confidence: 0.0 to 1.0
+- sources: list of up to 3 source names or URLs
 - explanation: 2-3 sentences explaining your verdict based on the evidence
 
-Return ONLY valid JSON, no explanation, no markdown:
+Return ONLY valid JSON:
 {
   "verdict": "supported|contradicted|unverifiable|contested",
   "confidence": 0.85,
@@ -35,56 +37,275 @@ Return ONLY valid JSON, no explanation, no markdown:
 }"""
 
 
+def search_wikipedia(query: str) -> str:
+    try:
+        resp = requests.get(
+            "https://en.wikipedia.org/api/rest_v1/page/summary/" + requests.utils.quote(query),
+            timeout=8,
+            headers={"User-Agent": "ThinkTrace/1.0 (research tool)"}
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            return f"Wikipedia: {data.get('extract', '')[:600]}"
+    except Exception as e:
+        logger.debug(f"Wikipedia error: {e}")
+    return ""
+
+
+def search_wikipedia_general(query: str) -> str:
+    try:
+        resp = requests.get(
+            "https://en.wikipedia.org/w/api.php",
+            params={
+                "action": "query",
+                "list": "search",
+                "srsearch": query,
+                "format": "json",
+                "srlimit": 2,
+            },
+            timeout=8,
+            headers={"User-Agent": "ThinkTrace/1.0"}
+        )
+        if resp.status_code == 200:
+            results = resp.json().get("query", {}).get("search", [])
+            if results:
+                snippets = [r.get("snippet", "").replace("<span class=\'searchmatch\'>", "").replace("</span>", "") for r in results[:2]]
+                return "Wikipedia search: " + " | ".join(snippets)
+    except Exception as e:
+        logger.debug(f"Wikipedia search error: {e}")
+    return ""
+
+
+def search_serper(query: str) -> str:
+    if not settings.serper_api_key:
+        return ""
+    try:
+        resp = requests.post(
+            "https://google.serper.dev/search",
+            headers={"X-API-KEY": settings.serper_api_key, "Content-Type": "application/json"},
+            json={"q": query, "num": 5},
+            timeout=8,
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            organic = data.get("organic", [])
+            snippets = [f"{r.get('title','')} — {r.get('snippet','')}" for r in organic[:4]]
+            return "Google Search: " + " | ".join(snippets)
+    except Exception as e:
+        logger.debug(f"Serper error: {e}")
+    return ""
+
+
+def search_arxiv(query: str) -> str:
+    try:
+        resp = requests.get(
+            "http://export.arxiv.org/api/query",
+            params={"search_query": f"all:{query}", "max_results": 3, "sortBy": "relevance"},
+            timeout=10,
+        )
+        if resp.status_code == 200:
+            import xml.etree.ElementTree as ET
+            root = ET.fromstring(resp.text)
+            ns = "{http://www.w3.org/2005/Atom}"
+            entries = root.findall(f"{ns}entry")
+            results = []
+            for e in entries[:3]:
+                title = e.find(f"{ns}title")
+                summary = e.find(f"{ns}summary")
+                if title is not None and summary is not None:
+                    results.append(f"{title.text.strip()}: {summary.text.strip()[:200]}")
+            if results:
+                return "ArXiv papers: " + " | ".join(results)
+    except Exception as e:
+        logger.debug(f"ArXiv error: {e}")
+    return ""
+
+
+def search_pubmed(query: str) -> str:
+    try:
+        search_resp = requests.get(
+            "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi",
+            params={"db": "pubmed", "term": query, "retmax": 3, "format": "json"},
+            timeout=8,
+        )
+        if search_resp.status_code != 200:
+            return ""
+        ids = search_resp.json().get("esearchresult", {}).get("idlist", [])
+        if not ids:
+            return ""
+        fetch_resp = requests.get(
+            "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi",
+            params={"db": "pubmed", "id": ",".join(ids), "format": "json"},
+            timeout=8,
+        )
+        if fetch_resp.status_code == 200:
+            result_data = fetch_resp.json().get("result", {})
+            titles = [result_data[uid].get("title", "") for uid in ids if uid in result_data]
+            if titles:
+                return "PubMed: " + " | ".join(titles[:3])
+    except Exception as e:
+        logger.debug(f"PubMed error: {e}")
+    return ""
+
+
+def search_news(query: str) -> str:
+    if not settings.news_api_key:
+        return ""
+    try:
+        resp = requests.get(
+            "https://newsapi.org/v2/everything",
+            params={
+                "q": query,
+                "apiKey": settings.news_api_key,
+                "pageSize": 3,
+                "sortBy": "relevancy",
+                "language": "en",
+            },
+            timeout=8,
+        )
+        if resp.status_code == 200:
+            articles = resp.json().get("articles", [])
+            results = [f"{a.get('source',{}).get('name','')} — {a.get('title','')}" for a in articles[:3]]
+            if results:
+                return "News: " + " | ".join(results)
+    except Exception as e:
+        logger.debug(f"NewsAPI error: {e}")
+    return ""
+
+
+def route_sources(claim: Claim) -> list:
+    """Decide which sources to query based on claim content."""
+    text = claim.text.lower()
+
+    is_scientific = any(w in text for w in [
+        "study", "research", "evidence", "percent", "%", "found", "shows",
+        "proven", "scientist", "published", "journal", "trial", "data",
+        "statistic", "survey", "experiment"
+    ])
+
+    is_medical = any(w in text for w in [
+        "vaccine", "drug", "disease", "health", "medical", "cancer",
+        "virus", "bacteria", "treatment", "cure", "symptom", "patient",
+        "hospital", "doctor", "fda", "who", "cdc"
+    ])
+
+    is_current_events = any(w in text for w in [
+        "president", "government", "election", "war", "policy", "law",
+        "congress", "senate", "minister", "country", "nation", "military",
+        "economy", "stock", "company", "ceo", "billion", "million"
+    ])
+
+    sources = ["wikipedia", "serper"]
+
+    if is_scientific:
+        sources.append("arxiv")
+    if is_medical:
+        sources.append("pubmed")
+    if is_current_events:
+        sources.append("news")
+
+    return list(set(sources))
+
+
+def gather_evidence(claim: Claim) -> tuple[str, list]:
+    """Gather evidence from multiple sources based on claim type."""
+    sources_to_use = route_sources(claim)
+    query = claim.text[:150]
+    evidence_parts = []
+    source_names = []
+
+    logger.info(f"Fact checking: {query[:60]}... using sources: {sources_to_use}")
+
+    if "serper" in sources_to_use:
+        result = search_serper(query)
+        if result:
+            evidence_parts.append(result)
+            source_names.append("Google Search")
+
+    if "wikipedia" in sources_to_use:
+        result = search_wikipedia(query[:60]) or search_wikipedia_general(query[:80])
+        if result:
+            evidence_parts.append(result)
+            source_names.append("Wikipedia")
+
+    if "arxiv" in sources_to_use:
+        result = search_arxiv(query[:100])
+        if result:
+            evidence_parts.append(result)
+            source_names.append("ArXiv")
+
+    if "pubmed" in sources_to_use:
+        result = search_pubmed(query[:100])
+        if result:
+            evidence_parts.append(result)
+            source_names.append("PubMed")
+
+    if "news" in sources_to_use:
+        result = search_news(query[:100])
+        if result:
+            evidence_parts.append(result)
+            source_names.append("NewsAPI")
+
+    combined = "\n\n".join(evidence_parts) if evidence_parts else "No evidence found from any source."
+    return combined, source_names
+
+
 def fact_check_single_claim(claim: Claim) -> FactCheckResult:
-    # Only fact-check premises — conclusions are opinions, not facts
     if claim.claim_type == "conclusion":
         return FactCheckResult(
             claim_id=claim.id,
             verdict="unverifiable",
             confidence=0.5,
             sources=[],
-            explanation="This is a conclusion/opinion claim — fact-checking not applicable.",
+            explanation="This is a conclusion or opinion — fact checking is not applicable.",
         )
 
-    try:
-        search_results = search.run(claim.text[:200])
-    except Exception:
-        search_results = "No search results available."
+    evidence, source_names = gather_evidence(claim)
 
     messages = [
         SystemMessage(content=FACT_CHECK_PROMPT),
         HumanMessage(content=(
             f"Claim to fact-check: {claim.text}\n\n"
-            f"Search results:\n{search_results}"
+            f"Evidence from {len(source_names)} sources ({', '.join(source_names)}):\n{evidence}"
         )),
     ]
 
-    response = llm.invoke(messages)
-    raw = response.content.strip()
-    raw = re.sub(r"^```(?:json)?", "", raw, flags=re.MULTILINE)
-    raw = re.sub(r"```$", "", raw, flags=re.MULTILINE)
-    parsed = json.loads(raw.strip())
+    try:
+        response = llm.invoke(messages)
+        raw = response.content.strip()
+        raw = re.sub(r"^```(?:json)?", "", raw, flags=re.MULTILINE)
+        raw = re.sub(r"```$", "", raw, flags=re.MULTILINE)
+        parsed = json.loads(raw.strip())
 
-    return FactCheckResult(
-        claim_id=claim.id,
-        verdict=parsed.get("verdict", "unverifiable"),
-        confidence=parsed.get("confidence", 0.5),
-        sources=parsed.get("sources", []),
-        explanation=parsed.get("explanation", ""),
-    )
+        return FactCheckResult(
+            claim_id=claim.id,
+            verdict=parsed.get("verdict", "unverifiable"),
+            confidence=parsed.get("confidence", 0.5),
+            sources=parsed.get("sources", source_names[:3]),
+            explanation=parsed.get("explanation", ""),
+        )
+    except Exception as e:
+        logger.error(f"Fact check LLM error: {e}")
+        return FactCheckResult(
+            claim_id=claim.id,
+            verdict="unverifiable",
+            confidence=0.3,
+            sources=source_names,
+            explanation=f"Evidence was gathered but analysis failed: {str(e)}",
+        )
 
 
 class FactCheckerAgent:
     def run(self, claim_tree: ClaimTree) -> list[FactCheckResult]:
-        # Only fact-check up to 6 claims to keep it fast and cost-effective
         checkable = [
             c for c in claim_tree.claims
             if c.claim_type in ("premise", "sub_claim")
-        ][:6]
+        ][:8]
 
         results = []
         for claim in checkable:
             result = fact_check_single_claim(claim)
             results.append(result)
+            logger.info(f"Fact check result: {result.verdict} ({result.confidence:.0%}) — {claim.text[:50]}")
 
         return results
