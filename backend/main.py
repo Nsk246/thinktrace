@@ -3,10 +3,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from core.config import get_settings
 from core.database import create_tables
+from core.memory import knowledge_graph
 from api.routes import router
 from api.watchdog_routes import router as watchdog_router
 from api.auth import router as auth_router
 from api.org_routes import router as org_router
+from api.eval_routes import router as eval_router
 from agents.watchdog import watchdog
 import logging
 
@@ -21,10 +23,12 @@ async def lifespan(app: FastAPI):
     logger.info(f"Environment: {settings.app_env}")
     create_tables()
     logger.info("Database tables created")
-    logger.info("Watchdog scheduler started")
+    knowledge_graph.connect()
+    logger.info("Knowledge graph initialized")
     yield
     logger.info("ThinkTrace shutting down...")
     watchdog.shutdown()
+    knowledge_graph.close()
 
 
 app = FastAPI(
@@ -46,6 +50,7 @@ app.include_router(auth_router)
 app.include_router(org_router)
 app.include_router(router)
 app.include_router(watchdog_router)
+app.include_router(eval_router)
 
 
 @app.get("/")
@@ -63,4 +68,5 @@ async def health():
     return {
         "status": "healthy",
         "watchdog": watchdog.get_status(),
+        "knowledge_graph": knowledge_graph.get_graph_stats("system"),
     }
