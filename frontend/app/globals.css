@@ -4,7 +4,6 @@
 @tailwind components;
 @tailwind utilities;
 
-
 * { box-sizing: border-box; }
 
 :root {
@@ -20,9 +19,6 @@
   --text4: #52525b;
   --accent: #6366f1;
   --accent2: #0ea5e9;
-  --success: #22c55e;
-  --warning: #f59e0b;
-  --danger: #ef4444;
 }
 
 .light {
@@ -36,8 +32,6 @@
   --text2: #3f3f46;
   --text3: #71717a;
   --text4: #a1a1aa;
-  --accent: #6366f1;
-  --accent2: #0ea5e9;
 }
 
 html { color-scheme: dark; }
@@ -49,11 +43,11 @@ body {
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
   line-height: 1.5;
+  overflow-x: hidden;
 }
 
 ::selection { background: rgba(99,102,241,0.3); color: var(--text); }
-
-::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: var(--bg); }
 ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 4px; }
 
@@ -64,23 +58,14 @@ body {
   background-clip: text;
 }
 
-.gradient-bg {
-  background: linear-gradient(135deg, #6366f1, #0ea5e9);
-}
-
 .card {
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: 14px;
 }
 
-.card-hover {
-  transition: border-color 0.15s, transform 0.15s;
-}
-.card-hover:hover {
-  border-color: var(--border2);
-  transform: translateY(-1px);
-}
+.card-hover { transition: border-color 0.15s, transform 0.15s; }
+.card-hover:hover { border-color: var(--border2); transform: translateY(-1px); }
 
 @keyframes spin { to { transform: rotate(360deg); } }
 .spin { animation: spin 0.8s linear infinite; }
@@ -90,3 +75,15 @@ body {
 
 @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
 .pulse { animation: pulse 1.5s ease-in-out infinite; }
+
+/* Responsive font sizes — big on desktop, sensible on mobile */
+.hero-title {
+  font-size: 48px;
+  font-weight: 800;
+  letter-spacing: -2px;
+  line-height: 1.1;
+}
+
+@media (max-width: 640px) {
+  .hero-title { font-size: 34px; letter-spacing: -1px; }
+}
