@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation";
 import { useTheme } from "@/components/ThemeProvider";
 import { useAuthStore } from "@/lib/store";
 import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 
 const links = [
   { href: "/", label: "Analyze" },
@@ -18,8 +19,13 @@ export function Navbar() {
   const { token, logout } = useAuthStore();
   const router = useRouter();
   const pathname = usePathname();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => { setMounted(true); }, []);
 
   const handleLogout = () => { logout(); router.push("/auth"); };
+
+  const isActive = (href: string) => mounted && pathname === href;
 
   return (
     <nav style={{
@@ -41,31 +47,24 @@ export function Navbar() {
       }}>
         <Link href="/" style={{ display: "flex", alignItems: "center", gap: 8, textDecoration: "none", flexShrink: 0 }}>
           <div style={{
-            width: 30,
-            height: 30,
-            borderRadius: 8,
+            width: 30, height: 30, borderRadius: 8,
             background: "linear-gradient(135deg,#6366f1,#0ea5e9)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            color: "#fff",
-            fontWeight: 700,
-            fontSize: 11,
-            letterSpacing: "-.3px",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            color: "#fff", fontWeight: 700, fontSize: 11, letterSpacing: "-.3px",
           }}>TT</div>
           <span style={{ color: "var(--text)", fontWeight: 600, fontSize: 14, letterSpacing: "-.3px" }}>ThinkTrace</span>
         </Link>
 
-        {token && (
+        {mounted && token && (
           <div style={{ display: "flex", gap: 2, flex: 1, justifyContent: "center" }}>
             {links.map(l => (
               <Link key={l.href} href={l.href} style={{
-                color: pathname === l.href ? "var(--text)" : "var(--text3)",
+                color: isActive(l.href) ? "var(--text)" : "var(--text3)",
                 fontSize: 13,
-                fontWeight: pathname === l.href ? 500 : 400,
+                fontWeight: isActive(l.href) ? 500 : 400,
                 padding: "5px 12px",
                 borderRadius: 8,
-                background: pathname === l.href ? "var(--bg3)" : "transparent",
+                background: isActive(l.href) ? "var(--bg3)" : "transparent",
                 textDecoration: "none",
                 transition: "all 0.15s",
               }}>{l.label}</Link>
@@ -75,42 +74,31 @@ export function Navbar() {
 
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
           <button onClick={toggle} style={{
-            width: 34,
-            height: 34,
-            borderRadius: 8,
+            width: 34, height: 34, borderRadius: 8,
             border: "1px solid var(--border)",
             background: "var(--bg2)",
             color: "var(--text3)",
             cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            fontSize: 14,
-            transition: "border-color 0.15s",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 14, transition: "border-color 0.15s",
           }}>
-            {theme === "dark" ? "○" : "●"}
+            {mounted && theme === "dark" ? "○" : "●"}
           </button>
 
-          {token ? (
+          {mounted && token ? (
             <button onClick={handleLogout} style={{
-              fontSize: 13,
-              padding: "6px 14px",
-              borderRadius: 8,
+              fontSize: 13, padding: "6px 14px", borderRadius: 8,
               border: "1px solid var(--border)",
               background: "transparent",
               color: "var(--text3)",
-              cursor: "pointer",
-              transition: "all 0.15s",
+              cursor: "pointer", transition: "all 0.15s",
             }}>Sign out</button>
           ) : (
             <Link href="/auth" style={{
-              fontSize: 13,
-              fontWeight: 500,
-              padding: "6px 14px",
-              borderRadius: 8,
+              fontSize: 13, fontWeight: 500,
+              padding: "6px 14px", borderRadius: 8,
               background: "linear-gradient(135deg,#6366f1,#0ea5e9)",
-              color: "#fff",
-              textDecoration: "none",
+              color: "#fff", textDecoration: "none",
             }}>Sign in</Link>
           )}
         </div>
