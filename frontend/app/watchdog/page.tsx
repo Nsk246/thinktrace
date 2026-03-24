@@ -10,15 +10,11 @@ export default function WatchdogPage() {
   const [msg, setMsg] = useState("");
 
   const load = async () => {
-    try {
-      const { data } = await api.get("/api/v1/watchdog/sources");
-      setSources(data.sources || []);
-    } catch {}
+    try { const { data } = await api.get("/api/v1/watchdog/sources"); setSources(data.sources || []); } catch {}
   };
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (!token) { window.location.href = "/auth"; return; }
+    if (!localStorage.getItem("token")) { window.location.href = "/auth"; return; }
     load();
   }, []);
 
@@ -29,128 +25,87 @@ export default function WatchdogPage() {
       setMsg("Source added successfully");
       setForm({ source_id: "", url: "", label: "", interval_minutes: 60 });
       load();
-    } catch (e: any) {
-      setMsg(e?.response?.data?.detail || "Failed to add source");
-    } finally {
-      setLoading(false);
-    }
+    } catch (e: any) { setMsg(e?.response?.data?.detail || "Failed"); }
+    finally { setLoading(false); }
   };
 
-  const checkNow = async (id: string) => {
-    try {
-      await api.post(`/api/v1/watchdog/sources/${id}/check-now`);
-      setMsg(`Check triggered for ${id}`);
-      setTimeout(load, 2000);
-    } catch {}
-  };
-
-  const remove = async (id: string) => {
-    try {
-      await api.delete(`/api/v1/watchdog/sources/${id}`);
-      load();
-    } catch {}
-  };
+  const inp = (placeholder: string, key: string, type = "text") => (
+    <input type={type} placeholder={placeholder} value={(form as any)[key]}
+           onChange={e => setForm({ ...form, [key]: e.target.value })}
+           style={{ width: "100%", height: 42, background: "var(--bg3)", border: "1px solid var(--border)", borderRadius: 8, color: "var(--text)", fontSize: 13, padding: "0 12px", outline: "none", fontFamily: "inherit" }} />
+  );
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
       <Navbar />
-      <div className="max-w-4xl mx-auto px-6 py-10">
-        <div className="mb-8">
-          <h1 className="text-2xl font-bold text-gradient">Watchdog</h1>
-          <p className="text-sm mt-1" style={{ color: "var(--text2)" }}>
-            Autonomous monitoring — add URLs and ThinkTrace watches them for reasoning changes
-          </p>
+      <div style={{ maxWidth: 800, margin: "0 auto", padding: "40px 24px 80px" }}>
+        <div style={{ marginBottom: 32 }}>
+          <h1 style={{ fontSize: 26, fontWeight: 800, letterSpacing: "-1px", marginBottom: 4 }}>
+            <span className="gradient-text">Watchdog</span>
+          </h1>
+          <p style={{ fontSize: 13, color: "var(--text3)" }}>Autonomous monitoring — ThinkTrace watches URLs and alerts you when reasoning changes</p>
         </div>
 
         {msg && (
-          <div className="rounded-xl p-3 mb-6 text-sm"
-               style={{ background: "var(--accent-glow)", color: "var(--accent)", border: "1px solid var(--accent)" }}>
+          <div style={{ padding: "10px 14px", background: "rgba(99,102,241,0.08)", border: "1px solid rgba(99,102,241,0.2)", borderRadius: 8, color: "#818cf8", fontSize: 13, marginBottom: 16 }}>
             {msg}
           </div>
         )}
 
-        {/* Add form */}
-        <div className="card p-6 mb-6 glow">
-          <h2 className="font-semibold mb-4 text-sm" style={{ color: "var(--text)" }}>Add a source to monitor</h2>
-          <div className="grid grid-cols-2 gap-4 mb-4">
-            {[
-              { key: "source_id", label: "Source ID", placeholder: "bbc_tech" },
-              { key: "label", label: "Label", placeholder: "BBC Technology" },
-            ].map(f => (
-              <div key={f.key}>
-                <label className="text-xs mb-1 block" style={{ color: "var(--text2)" }}>{f.label}</label>
-                <input value={(form as any)[f.key]}
-                       onChange={e => setForm({ ...form, [f.key]: e.target.value })}
-                       className="w-full px-3 py-2 rounded-xl text-sm outline-none"
-                       style={{ background: "var(--bg2)", border: "1px solid var(--border)", color: "var(--text)" }}
-                       placeholder={f.placeholder} />
-              </div>
-            ))}
+        <div className="card" style={{ padding: "20px 24px", marginBottom: 16 }}>
+          <h2 style={{ fontSize: 14, fontWeight: 600, color: "var(--text2)", marginBottom: 16 }}>Add a source to monitor</h2>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+            <div>{inp("Source ID (e.g. bbc_tech)", "source_id")}</div>
+            <div>{inp("Label (e.g. BBC Technology)", "label")}</div>
           </div>
-          <div className="mb-4">
-            <label className="text-xs mb-1 block" style={{ color: "var(--text2)" }}>URL</label>
-            <input value={form.url} onChange={e => setForm({ ...form, url: e.target.value })}
-                   className="w-full px-3 py-2 rounded-xl text-sm outline-none"
-                   style={{ background: "var(--bg2)", border: "1px solid var(--border)", color: "var(--text)" }}
-                   placeholder="https://example.com/article" />
-          </div>
-          <div className="flex items-center justify-between">
-            <div>
-              <label className="text-xs mb-1 block" style={{ color: "var(--text2)" }}>Check every (minutes)</label>
+          <div style={{ marginBottom: 10 }}>{inp("URL (https://...)", "url")}</div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 13, color: "var(--text3)" }}>Check every</span>
               <input type="number" value={form.interval_minutes}
                      onChange={e => setForm({ ...form, interval_minutes: Number(e.target.value) })}
-                     className="w-28 px-3 py-2 rounded-xl text-sm outline-none"
-                     style={{ background: "var(--bg2)", border: "1px solid var(--border)", color: "var(--text)" }} />
+                     style={{ width: 70, height: 36, background: "var(--bg3)", border: "1px solid var(--border)", borderRadius: 8, color: "var(--text)", fontSize: 13, padding: "0 10px", outline: "none", textAlign: "center" }} />
+              <span style={{ fontSize: 13, color: "var(--text3)" }}>minutes</span>
             </div>
             <button onClick={addSource} disabled={loading || !form.url || !form.source_id}
-                    className="px-5 py-2 rounded-xl text-sm font-medium text-white accent-gradient disabled:opacity-40">
+                    style={{ padding: "8px 20px", borderRadius: 8, border: "none", background: "linear-gradient(135deg,#6366f1,#0ea5e9)", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", opacity: loading || !form.url ? 0.5 : 1 }}>
               {loading ? "Adding..." : "Add source"}
             </button>
           </div>
         </div>
 
-        {/* Sources list */}
-        <div className="card p-6">
-          <h2 className="font-semibold mb-4 text-sm" style={{ color: "var(--text)" }}>
-            Active sources ({sources.length})
-          </h2>
+        <div className="card" style={{ padding: "20px 24px" }}>
+          <h2 style={{ fontSize: 14, fontWeight: 600, color: "var(--text2)", marginBottom: 16 }}>Active sources ({sources.length})</h2>
           {sources.length === 0 ? (
-            <p className="text-sm text-center py-6" style={{ color: "var(--text2)" }}>
-              No sources yet — add one above to start monitoring
-            </p>
-          ) : (
-            <div className="space-y-3">
-              {sources.map(s => (
-                <div key={s.source_id} className="p-4 rounded-xl"
-                     style={{ background: "var(--bg2)", border: "1px solid var(--border)" }}>
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <div className="font-medium text-sm" style={{ color: "var(--text)" }}>{s.label}</div>
-                      <div className="text-xs mt-0.5 truncate max-w-xs" style={{ color: "var(--text2)" }}>{s.url}</div>
-                    </div>
-                    <div className="flex gap-2">
-                      <button onClick={() => checkNow(s.source_id)}
-                              className="text-xs px-3 py-1 rounded-lg"
-                              style={{ background: "var(--accent-glow)", color: "var(--accent)" }}>
-                        Check now
-                      </button>
-                      <button onClick={() => remove(s.source_id)}
-                              className="text-xs px-3 py-1 rounded-lg"
-                              style={{ background: "rgba(239,68,68,0.1)", color: "#ef4444" }}>
-                        Remove
-                      </button>
-                    </div>
-                  </div>
-                  <div className="flex gap-4 mt-3 text-xs" style={{ color: "var(--text2)" }}>
-                    <span>Checks: {s.check_count}</span>
-                    <span>Alerts: {s.alert_count}</span>
-                    <span>Every {s.interval_minutes}m</span>
-                    {s.last_checked && <span>Last: {new Date(s.last_checked).toLocaleTimeString()}</span>}
-                  </div>
+            <p style={{ textAlign: "center", color: "var(--text3)", fontSize: 13, padding: "24px 0" }}>No sources yet — add one above</p>
+          ) : sources.map(s => (
+            <div key={s.source_id} style={{ padding: "14px 16px", background: "var(--bg3)", borderRadius: 10, marginBottom: 8 }}>
+              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text)", marginBottom: 2 }}>{s.label}</div>
+                  <div style={{ fontSize: 11, color: "var(--text3)", wordBreak: "break-all" }}>{s.url}</div>
                 </div>
-              ))}
+                <div style={{ display: "flex", gap: 6, flexShrink: 0, marginLeft: 12 }}>
+                  <button onClick={() => api.post(`/api/v1/watchdog/sources/${s.source_id}/check-now`).then(load)}
+                          style={{ fontSize: 11, padding: "4px 10px", borderRadius: 6, border: "1px solid rgba(99,102,241,0.3)", background: "rgba(99,102,241,0.08)", color: "#818cf8", cursor: "pointer" }}>
+                    Check now
+                  </button>
+                  <button onClick={() => api.delete(`/api/v1/watchdog/sources/${s.source_id}`).then(load)}
+                          style={{ fontSize: 11, padding: "4px 10px", borderRadius: 6, border: "1px solid rgba(239,68,68,0.3)", background: "rgba(239,68,68,0.08)", color: "#ef4444", cursor: "pointer" }}>
+                    Remove
+                  </button>
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: 16, marginTop: 10 }}>
+                {[["Checks", s.check_count], ["Alerts", s.alert_count], ["Interval", `${s.interval_minutes}m`]].map(([l, v]) => (
+                  <div key={l as string}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: "#6366f1" }}>{v}</div>
+                    <div style={{ fontSize: 10, color: "var(--text4)" }}>{l}</div>
+                  </div>
+                ))}
+              </div>
             </div>
-          )}
+          ))}
         </div>
       </div>
     </div>

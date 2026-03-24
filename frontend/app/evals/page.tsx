@@ -8,132 +8,92 @@ export default function EvalsPage() {
   const [running, setRunning] = useState(false);
   const [msg, setMsg] = useState("");
 
-  const load = async () => {
-    try {
-      const d = await getEvalResults();
-      setData(d);
-    } catch {}
-  };
-
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (!token) { window.location.href = "/auth"; return; }
-    load();
+    if (!localStorage.getItem("token")) { window.location.href = "/auth"; return; }
+    getEvalResults().then(setData).catch(() => {});
   }, []);
 
   const runSuite = async () => {
     setRunning(true);
-    setMsg("Running eval suite... this takes ~2 minutes");
+    setMsg("Eval suite running — takes ~2 minutes...");
     try {
       await api.post("/api/v1/eval/run");
       setTimeout(async () => {
-        await load();
-        setRunning(false);
-        setMsg("Eval suite complete");
+        const d = await getEvalResults().catch(() => null);
+        setData(d); setRunning(false); setMsg("Eval suite complete");
       }, 120000);
-    } catch (e: any) {
-      setMsg(e?.response?.data?.detail || "Failed to run evals");
-      setRunning(false);
-    }
+    } catch (e: any) { setMsg(e?.response?.data?.detail || "Failed"); setRunning(false); }
   };
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
       <Navbar />
-      <div className="max-w-4xl mx-auto px-6 py-10">
-        <div className="flex items-start justify-between mb-8">
+      <div style={{ maxWidth: 800, margin: "0 auto", padding: "40px 24px 80px" }}>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 32 }}>
           <div>
-            <h1 className="text-2xl font-bold text-gradient">Eval Suite</h1>
-            <p className="text-sm mt-1" style={{ color: "var(--text2)" }}>
-              LLM evaluation framework — tests fallacy detection, fact checking, and score calibration
-            </p>
+            <h1 style={{ fontSize: 26, fontWeight: 800, letterSpacing: "-1px", marginBottom: 4 }}>
+              <span className="gradient-text">Eval Suite</span>
+            </h1>
+            <p style={{ fontSize: 13, color: "var(--text3)" }}>Tests fallacy detection, fact checking accuracy, and score calibration</p>
           </div>
           <button onClick={runSuite} disabled={running}
-                  className="px-5 py-2.5 rounded-xl text-sm font-medium text-white accent-gradient disabled:opacity-50">
+                  style={{ padding: "9px 20px", borderRadius: 10, border: "none", background: running ? "var(--bg3)" : "linear-gradient(135deg,#6366f1,#0ea5e9)", color: running ? "var(--text4)" : "#fff", fontSize: 13, fontWeight: 600, cursor: running ? "not-allowed" : "pointer", flexShrink: 0 }}>
             {running ? "Running..." : "Run suite"}
           </button>
         </div>
 
         {msg && (
-          <div className="rounded-xl p-3 mb-6 text-sm"
-               style={{ background: "var(--accent-glow)", color: "var(--accent)", border: "1px solid var(--accent)" }}>
+          <div style={{ padding: "10px 14px", background: "rgba(99,102,241,0.08)", border: "1px solid rgba(99,102,241,0.2)", borderRadius: 8, color: "#818cf8", fontSize: 13, marginBottom: 16 }}>
             {msg}
           </div>
         )}
 
-        {data && data.status === "complete" && (
+        {data?.status === "complete" && (
           <>
-            {/* Summary */}
-            <div className="grid grid-cols-3 gap-4 mb-6">
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 20 }}>
               {[
-                { label: "Total cases", val: data.total },
-                { label: "Passed", val: data.passed, color: "#22c55e" },
-                { label: "Pass rate", val: `${data.pass_rate}%`, color: data.pass_rate === 100 ? "#22c55e" : "#f59e0b" },
+                { l: "Total cases", v: data.total, c: "#6366f1" },
+                { l: "Passed", v: data.passed, c: "#22c55e" },
+                { l: "Pass rate", v: `${data.pass_rate}%`, c: data.pass_rate === 100 ? "#22c55e" : "#f59e0b" },
               ].map(s => (
-                <div key={s.label} className="card p-5 text-center">
-                  <div className="text-3xl font-bold mb-1" style={{ color: s.color || "var(--accent)" }}>{s.val}</div>
-                  <div className="text-xs" style={{ color: "var(--text2)" }}>{s.label}</div>
+                <div key={s.l} className="card" style={{ padding: "16px 20px", textAlign: "center" }}>
+                  <div style={{ fontSize: 11, color: "var(--text4)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>{s.l}</div>
+                  <div style={{ fontSize: 30, fontWeight: 800, color: s.c, letterSpacing: "-1px" }}>{s.v}</div>
                 </div>
               ))}
             </div>
 
-            {/* Results */}
-            <div className="space-y-4">
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               {data.results?.map((r: any) => (
-                <div key={r.eval_id} className="card p-6">
-                  <div className="flex items-center justify-between mb-3">
+                <div key={r.eval_id} className="card" style={{ padding: "18px 20px" }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
                     <div>
-                      <div className="font-semibold text-sm" style={{ color: "var(--text)" }}>{r.description}</div>
-                      <div className="text-xs mt-0.5" style={{ color: "var(--text2)" }}>ID: {r.eval_id}</div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text)", marginBottom: 2 }}>{r.description}</div>
+                      <div style={{ fontSize: 11, color: "var(--text4)" }}>{r.eval_id}</div>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <span className="text-lg font-bold" style={{ color: "var(--accent)" }}>
-                        {r.epistemic_score}/100
-                      </span>
-                      <span className="text-xs px-2 py-1 rounded-full font-medium"
-                            style={{
-                              background: r.passed ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)",
-                              color: r.passed ? "#22c55e" : "#ef4444",
-                            }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+                      <span style={{ fontSize: 22, fontWeight: 800, color: "#6366f1", letterSpacing: "-1px" }}>{r.epistemic_score}</span>
+                      <span style={{ fontSize: 10, fontWeight: 600, padding: "3px 10px", borderRadius: 100, background: r.passed ? "rgba(34,197,94,0.12)" : "rgba(239,68,68,0.12)", color: r.passed ? "#22c55e" : "#ef4444" }}>
                         {r.passed ? "PASS" : "FAIL"}
                       </span>
                     </div>
                   </div>
-
-                  <div className="grid grid-cols-3 gap-3 text-xs">
-                    <div className="p-3 rounded-xl" style={{ background: "var(--bg2)" }}>
-                      <div className="font-medium mb-1" style={{ color: "var(--text2)" }}>Score range</div>
-                      <div style={{ color: "var(--text)" }}>
-                        {r.expected_score_range[0]}–{r.expected_score_range[1]}
-                        <span className="ml-1" style={{ color: r.score_in_range ? "#22c55e" : "#ef4444" }}>
-                          {r.score_in_range ? "✓" : "✗"}
-                        </span>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+                    {[
+                      { l: "Score range", v: `${r.expected_score_range[0]}–${r.expected_score_range[1]}`, ok: r.score_in_range },
+                      { l: "Fallacy recall", v: r.fallacy_scores?.recall?.toFixed(2) ?? "—", ok: r.fallacy_recall_ok },
+                      { l: "Claim accuracy", v: r.claim_scores?.accuracy?.toFixed(2) ?? "—", ok: true },
+                    ].map(m => (
+                      <div key={m.l} style={{ padding: "10px 12px", background: "var(--bg3)", borderRadius: 8 }}>
+                        <div style={{ fontSize: 10, color: "var(--text4)", marginBottom: 4 }}>{m.l}</div>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: m.ok ? "#22c55e" : "#ef4444" }}>{m.v} {m.ok ? "✓" : "✗"}</div>
                       </div>
-                    </div>
-                    <div className="p-3 rounded-xl" style={{ background: "var(--bg2)" }}>
-                      <div className="font-medium mb-1" style={{ color: "var(--text2)" }}>Fallacy recall</div>
-                      <div style={{ color: "var(--text)" }}>
-                        {r.fallacy_scores?.recall?.toFixed(2) ?? "—"}
-                        <span className="ml-1" style={{ color: r.fallacy_recall_ok ? "#22c55e" : "#ef4444" }}>
-                          {r.fallacy_recall_ok ? "✓" : "✗"}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="p-3 rounded-xl" style={{ background: "var(--bg2)" }}>
-                      <div className="font-medium mb-1" style={{ color: "var(--text2)" }}>Claim accuracy</div>
-                      <div style={{ color: "var(--text)" }}>
-                        {r.claim_scores?.accuracy?.toFixed(2) ?? "—"}
-                      </div>
-                    </div>
+                    ))}
                   </div>
-
                   {r.fallacies_detected?.length > 0 && (
-                    <div className="mt-3 flex flex-wrap gap-1">
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 10 }}>
                       {r.fallacies_detected.map((f: string) => (
-                        <span key={f} className="text-xs px-2 py-0.5 rounded-full"
-                              style={{ background: "rgba(239,68,68,0.1)", color: "#ef4444" }}>
-                          {f}
-                        </span>
+                        <span key={f} style={{ fontSize: 11, padding: "2px 8px", borderRadius: 100, background: "rgba(239,68,68,0.1)", color: "#f87171" }}>{f}</span>
                       ))}
                     </div>
                   )}
@@ -144,14 +104,11 @@ export default function EvalsPage() {
         )}
 
         {(!data || data.status === "no_results") && !running && (
-          <div className="card p-12 text-center">
-            <div className="text-4xl mb-4">🧪</div>
-            <p className="font-semibold mb-2" style={{ color: "var(--text)" }}>No eval results yet</p>
-            <p className="text-sm mb-6" style={{ color: "var(--text2)" }}>
-              Run the suite to test fallacy detection, fact checking, and score calibration
-            </p>
-            <button onClick={runSuite}
-                    className="px-6 py-2.5 rounded-xl text-sm font-medium text-white accent-gradient">
+          <div className="card" style={{ padding: "60px 24px", textAlign: "center" }}>
+            <div style={{ fontSize: 40, marginBottom: 16 }}>🧪</div>
+            <p style={{ fontSize: 15, fontWeight: 600, color: "var(--text)", marginBottom: 8 }}>No eval results yet</p>
+            <p style={{ fontSize: 13, color: "var(--text3)", marginBottom: 24 }}>Run the suite to test agent accuracy and score calibration</p>
+            <button onClick={runSuite} style={{ padding: "10px 24px", borderRadius: 10, border: "none", background: "linear-gradient(135deg,#6366f1,#0ea5e9)", color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
               Run eval suite
             </button>
           </div>
