@@ -36,6 +36,8 @@ export function Navbar() {
 
   const handleLogout = () => { logout(); router.push("/auth"); };
   const isActive = (href: string) => mounted && pathname === href;
+  // Only show auth state after client mount to prevent hydration flash
+  const isLoggedIn = mounted && !!token;
 
   return (
     <>
@@ -62,7 +64,7 @@ export function Navbar() {
           </Link>
 
           {/* Desktop nav links */}
-          {mounted && token && !isMobile && (
+          {isLoggedIn && !isMobile && (
             <div style={{ display: "flex", gap: 2, flex: 1, justifyContent: "center" }}>
               {links.map(l => (
                 <Link key={l.href} href={l.href} style={{
@@ -88,7 +90,7 @@ export function Navbar() {
             </button>
 
             {/* Desktop sign out */}
-            {mounted && token && !isMobile && (
+            {isLoggedIn && !isMobile && (
               <button onClick={handleLogout} style={{
                 fontSize: 13, padding: "6px 14px", borderRadius: 8,
                 border: "1px solid var(--border)", background: "transparent",
@@ -97,7 +99,7 @@ export function Navbar() {
             )}
 
             {/* Sign in (not logged in) */}
-            {mounted && !token && (
+            {!isLoggedIn && mounted && (
               <Link href="/auth" style={{
                 fontSize: 13, fontWeight: 500, padding: "6px 14px", borderRadius: 8,
                 background: "linear-gradient(135deg,#6366f1,#0ea5e9)",
@@ -106,7 +108,7 @@ export function Navbar() {
             )}
 
             {/* Hamburger — mobile only when logged in */}
-            {mounted && token && isMobile && (
+            {isLoggedIn && isMobile && (
               <button
                 onClick={() => setMenuOpen(o => !o)}
                 style={{

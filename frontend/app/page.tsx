@@ -71,6 +71,7 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [resultTab, setResultTab] = useState<ResultTab>("fallacies");
+  const [windowWidth, setWindowWidth] = useState(1200);
   const [activeAgent, setActiveAgent] = useState(-1);
   const [analysisId, setAnalysisId] = useState<string | null>(null);
   const [shareCopied, setShareCopied] = useState(false);
@@ -130,6 +131,19 @@ export default function Home() {
   };
 
   useEffect(() => () => timerRef.current.forEach(clearTimeout), []);
+
+  useEffect(() => {
+    setWindowWidth(window.innerWidth);
+    const handle = () => setWindowWidth(window.innerWidth);
+    window.addEventListener("resize", handle);
+    return () => window.removeEventListener("resize", handle);
+  }, []);
+
+  const grid4 = {
+    display: "grid" as const,
+    gridTemplateColumns: windowWidth > 900 ? "repeat(4,1fr)" : windowWidth > 560 ? "repeat(2,1fr)" : "1fr",
+    gap: 14,
+  };
 
   const nodeTypeStyle = (type: string): React.CSSProperties => ({
     fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 100,
@@ -509,7 +523,7 @@ export default function Home() {
       {/* AGENT EXPLAINER */}
       <div style={{ maxWidth: 960, margin: "72px auto 0", padding: "0 20px" }}>
         {sec("How it works", "Four agents. One verdict.", "Each agent is a specialist. They run in parallel and their findings are combined into a single structured report.")}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 14 }}>
+        <div style={grid4}>
           {agents.map((a, i) => (
             <div key={a.name} className="card" style={{ padding: "26px 22px" }}>
               <div style={{
@@ -531,7 +545,7 @@ export default function Home() {
       {/* USE CASES */}
       <div style={{ maxWidth: 960, margin: "72px auto 0", padding: "0 20px" }}>
         {sec("Who uses it", "Built for people who care about getting it right")}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 14 }}>
+        <div style={grid4}>
           {useCases.map(u => (
             <div key={u.title} className="card" style={{ padding: "24px 22px" }}>
               <div style={{ fontSize: 30, marginBottom: 14 }}>{u.icon}</div>
