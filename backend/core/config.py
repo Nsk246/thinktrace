@@ -33,6 +33,9 @@ class Settings(BaseSettings):
     neo4j_password: str = "password"
     serper_api_key: str = ""
     news_api_key: str = ""
+    transformers_offline: str = "1"
+    hf_hub_offline: str = "1"
+    hf_datasets_offline: str = "1"
 
     class Config:
         env_file = ".env"

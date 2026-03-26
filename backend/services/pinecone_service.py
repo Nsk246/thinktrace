@@ -13,14 +13,28 @@ def get_embedder():
     if _embedder is not None:
         return _embedder
     try:
-        from sentence_transformers import SentenceTransformer
         import os
-        # Use local cache — never hit HuggingFace network during inference
         cache_dir = os.path.join(os.path.dirname(__file__), "..", "models")
         cache_dir = os.path.abspath(cache_dir)
+
+        # Block ALL network calls from transformers/HuggingFace
         os.environ["TRANSFORMERS_OFFLINE"] = "1"
+        os.environ["HF_HUB_OFFLINE"] = "1"
         os.environ["HF_DATASETS_OFFLINE"] = "1"
-        _embedder = SentenceTransformer("all-MiniLM-L6-v2", cache_folder=cache_dir)
+        os.environ["HF_HUB_DISABLE_TELEMETRY"] = "1"
+        os.environ["DISABLE_TELEMETRY"] = "1"
+
+        # Suppress verbose loading logs
+        import logging
+        logging.getLogger("sentence_transformers").setLevel(logging.WARNING)
+        logging.getLogger("transformers").setLevel(logging.WARNING)
+        logging.getLogger("huggingface_hub").setLevel(logging.WARNING)
+
+        from sentence_transformers import SentenceTransformer
+        _embedder = SentenceTransformer(
+            "all-MiniLM-L6-v2",
+            cache_folder=cache_dir,
+        )
         logger.info(f"Sentence transformer loaded from local cache: {cache_dir}")
         return _embedder
     except Exception as e:

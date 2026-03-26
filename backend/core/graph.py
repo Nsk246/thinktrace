@@ -88,6 +88,7 @@ def run_epistemic_scorer(state: AnalysisState) -> AnalysisState:
             claim_tree=state["claim_tree"],
             fallacies=state["fallacies"],
             fact_checks=state["fact_checks"],
+            argument_graph=state["argument_graph"],
         )
         return {**state, "epistemic_score": score, "status": "complete"}
     except Exception as e:

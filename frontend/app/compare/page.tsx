@@ -22,13 +22,11 @@ export default function ComparePage() {
     }
     setLoading(true); setError(""); setResult(null);
     try {
-      const { data } = await api.post("/api/v1/compare", null, {
-        params: {
-          content_a: contentA,
-          content_b: contentB,
-          label_a: labelA,
-          label_b: labelB,
-        }
+      const { data } = await api.post("/api/v1/compare", {
+        content_a: contentA,
+        content_b: contentB,
+        label_a: labelA,
+        label_b: labelB,
       });
       setResult(data);
     } catch (e: any) {

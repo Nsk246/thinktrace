@@ -59,7 +59,8 @@ Return ONLY valid JSON:
 
 class EpistemicScorerAgent:
     def run(self, claim_tree: ClaimTree, fallacies: list[Fallacy],
-            fact_checks: list[FactCheckResult]) -> EpistemicScore:
+            fact_checks: list[FactCheckResult],
+            argument_graph=None) -> EpistemicScore:
 
         content_meta = claim_tree.__dict__.get("content_meta", {})
         content_type = content_meta.get("content_type", "direct_argument")
@@ -79,6 +80,26 @@ class EpistemicScorerAgent:
         author_claims = sum(1 for c in claim_tree.claims if c.__dict__.get("is_author_claim", True))
         author_ratio = round(author_claims / total, 2) if total > 0 else 1.0
 
+        # Extract argument graph insights
+        graph_insights = []
+        if argument_graph:
+            edges = argument_graph.edges if hasattr(argument_graph, "edges") else []
+            weak_edges = [
+                e for e in edges
+                if e.__dict__.get("validity_score", 1.0) < 0.5
+            ]
+            missing = argument_graph.__dict__.get("missing_premises", [])
+            circular = argument_graph.__dict__.get("has_circular_reasoning", False)
+
+            if weak_edges:
+                graph_insights.append(f"{len(weak_edges)} weak reasoning connections detected (validity < 0.5)")
+            if missing:
+                graph_insights.append(f"Missing premises: {'; '.join(missing[:2])}")
+            if circular:
+                graph_insights.append("Circular reasoning detected in argument structure")
+            if not weak_edges and not missing and not circular and len(edges) > 0:
+                graph_insights.append(f"Strong argument structure: {len(edges)} valid logical connections")
+
         claims_text = []
         for c in claim_tree.claims:
             is_author = c.__dict__.get("is_author_claim", True)
@@ -96,6 +117,8 @@ class EpistemicScorerAgent:
             for fc in fact_checks
         ] if fact_checks else ["No fact checks"]
 
+        graph_text = "\n".join(graph_insights) if graph_insights else "No argument graph available"
+
         try:
             response = llm.invoke([HumanMessage(content=SCORING_PROMPT.format(
                 content_type=content_type,
@@ -104,7 +127,7 @@ class EpistemicScorerAgent:
                 fallacies="\n".join(fallacies_text),
                 fact_checks="\n".join(fc_text),
                 author_claim_ratio=f"{author_ratio} ({author_claims}/{total} claims are the author's own)",
-            ))])
+            ) + f"\n\nArgument graph analysis:\n{graph_text}")])
 
             raw = response.content.strip()
             raw = re.sub(r"^```(?:json)?", "", raw, flags=re.MULTILINE).strip()

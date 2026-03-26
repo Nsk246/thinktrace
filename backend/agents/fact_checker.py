@@ -210,43 +210,48 @@ def route_sources(claim: Claim) -> list:
 
 
 def gather_evidence(claim: Claim) -> tuple[str, list]:
-    """Gather evidence from multiple sources based on claim type."""
+    """
+    Gather evidence from multiple sources in parallel with per-source timeouts.
+    A slow source never blocks the others.
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
     sources_to_use = route_sources(claim)
     query = claim.text[:150]
-    evidence_parts = []
-    source_names = []
 
     logger.info(f"Fact checking: {query[:60]}... using sources: {sources_to_use}")
 
+    # Map source name to (function, query, label)
+    source_tasks = []
     if "serper" in sources_to_use:
-        result = search_serper(query)
-        if result:
-            evidence_parts.append(result)
-            source_names.append("Google Search")
-
+        source_tasks.append(("Google Search", search_serper, query))
     if "wikipedia" in sources_to_use:
-        result = search_wikipedia(query[:60]) or search_wikipedia_general(query[:80])
-        if result:
-            evidence_parts.append(result)
-            source_names.append("Wikipedia")
-
+        source_tasks.append(("Wikipedia", lambda q: search_wikipedia(q[:60]) or search_wikipedia_general(q[:80]), query))
     if "arxiv" in sources_to_use:
-        result = search_arxiv(query[:100])
-        if result:
-            evidence_parts.append(result)
-            source_names.append("ArXiv")
-
+        source_tasks.append(("ArXiv", search_arxiv, query[:100]))
     if "pubmed" in sources_to_use:
-        result = search_pubmed(query[:100])
-        if result:
-            evidence_parts.append(result)
-            source_names.append("PubMed")
-
+        source_tasks.append(("PubMed", search_pubmed, query[:100]))
     if "news" in sources_to_use:
-        result = search_news(query[:100])
-        if result:
-            evidence_parts.append(result)
-            source_names.append("NewsAPI")
+        source_tasks.append(("NewsAPI", search_news, query[:100]))
+
+    evidence_parts = []
+    source_names = []
+
+    # Run all sources in parallel with 8 second timeout per source
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        future_to_label = {
+            executor.submit(fn, q): label
+            for label, fn, q in source_tasks
+        }
+        for future in as_completed(future_to_label, timeout=10):
+            label = future_to_label[future]
+            try:
+                result = future.result(timeout=8)
+                if result:
+                    evidence_parts.append(result)
+                    source_names.append(label)
+            except Exception as e:
+                logger.debug(f"Source {label} timed out or failed: {e}")
 
     combined = "\n\n".join(evidence_parts) if evidence_parts else "No evidence found from any source."
     return combined, source_names

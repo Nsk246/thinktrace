@@ -1,4 +1,5 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException
+from pydantic import BaseModel
 from agents.ingestion import IngestionAgent
 from core.models import AnalysisRequest, ContentType
 from core.graph import run_full_analysis
@@ -339,13 +340,20 @@ async def get_public_report(analysis_id: str):
         db.close()
 
 
+class CompareRequest(BaseModel):
+    content_a: str
+    content_b: str
+    label_a: str = "Argument A"
+    label_b: str = "Argument B"
+
+
 @router.post("/compare")
-async def compare_arguments(
-    content_a: str,
-    content_b: str,
-    label_a: str = "Argument A",
-    label_b: str = "Argument B",
-):
+async def compare_arguments(request: CompareRequest):
+    content_a = request.content_a
+    content_b = request.content_b
+    label_a = request.label_a
+    label_b = request.label_b
+    _ = None  # unused
     """Compare two arguments and return a structured comparison."""
     from langchain_anthropic import ChatAnthropic
     from langchain_core.messages import HumanMessage, SystemMessage
@@ -359,7 +367,7 @@ async def compare_arguments(
         max_tokens=1500,
     )
 
-    if len(content_a) > 10000 or len(content_b) > 10000:
+    if len(request.content_a) > 10000 or len(request.content_b) > 10000:
         raise HTTPException(status_code=400, detail="Each argument must be under 10,000 characters for comparison.")
 
     # Run both analyses in parallel

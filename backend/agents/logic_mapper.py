@@ -12,49 +12,65 @@ settings = get_settings()
 llm = ChatAnthropic(
     model="claude-sonnet-4-20250514",
     api_key=settings.anthropic_api_key,
-    max_tokens=2048,
+    max_tokens=4096,
 )
 
-MAPPING_PROMPT = """You are an expert logician. Analyze the logical structure of these claims.
-
-For each logical relationship between claims:
-1. Identify the relation: "supports", "contradicts", "qualifies", "requires"
-2. Score the validity of that relationship (0.0 to 1.0):
-   - 1.0 = the source claim strongly and directly supports/contradicts the target
-   - 0.7 = moderate support, some logical gap
-   - 0.4 = weak support, significant logical leap
-   - 0.1 = very tenuous connection
-3. Note any weakness in the reasoning chain
-4. Identify missing premises — unstated assumptions required for the argument to work
-5. Flag circular reasoning if present
+MAPPING_PROMPT = """Analyze the logical structure of these claims and return a JSON object.
 
 Claims:
 {claims}
 
-Return ONLY valid JSON:
-{
+Return this exact JSON structure:
+{{
   "nodes": [
-    {
-      "id": "claim id",
-      "text": "claim text",
-      "node_type": "premise|conclusion|sub_claim"
-    }
+    {{"id": "claim_id", "text": "claim text", "node_type": "premise|conclusion|sub_claim"}}
   ],
   "edges": [
-    {
-      "source_id": "id",
-      "target_id": "id",
-      "relation": "supports|contradicts|qualifies|requires",
-      "validity_score": 0.0-1.0,
-      "weakness_note": "explanation of any logical gap, or null if strong"
-    }
+    {{"source_id": "id", "target_id": "id", "relation": "supports|contradicts|qualifies", "validity_score": 0.8, "weakness_note": null}}
   ],
-  "missing_premises": [
-    "Unstated assumption required for the argument"
-  ],
+  "missing_premises": [],
   "has_circular_reasoning": false,
   "circular_reasoning_note": null
-}"""
+}}"""
+
+
+def extract_json(text: str) -> dict | None:
+    """Extract JSON using brace counting — handles nested objects correctly."""
+    text = text.strip()
+    
+    # Find first {
+    start = text.find("{")
+    if start == -1:
+        return None
+    
+    # Count braces to find matching closing }
+    depth = 0
+    in_string = False
+    escape_next = False
+    
+    for i, ch in enumerate(text[start:], start=start):
+        if escape_next:
+            escape_next = False
+            continue
+        if ch == "\\":
+            escape_next = True
+            continue
+        if ch == '"' and not escape_next:
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                try:
+                    return json.loads(text[start:i+1])
+                except json.JSONDecodeError as e:
+                    logger.error(f"JSON decode error at position {i}: {e}")
+                    return None
+    return None
 
 
 class LogicMapperAgent:
@@ -63,7 +79,7 @@ class LogicMapperAgent:
             claim_tree.claims,
             key=lambda c: 0 if c.claim_type == "conclusion"
                 else (1 if c.claim_type == "sub_claim" else 2)
-        )[:8]
+        )[:6]
 
         claims_text = "\n".join([
             f"ID: {c.id} | Type: {c.claim_type} | Text: {c.text}"
@@ -72,20 +88,15 @@ class LogicMapperAgent:
 
         try:
             response = llm.invoke([
-                SystemMessage(content="You are an expert logician. Return only valid JSON with no markdown, no backticks, no explanation."),
+                SystemMessage(content="You are an expert logician. Return only a valid JSON object. Start with { and end with }. No markdown or explanation."),
                 HumanMessage(content=MAPPING_PROMPT.format(claims=claims_text)),
             ])
-            raw = response.content.strip()
-            # Aggressively clean markdown
-            raw = re.sub(r"^```(?:json)?\s*", "", raw, flags=re.MULTILINE)
-            raw = re.sub(r"\s*```$", "", raw, flags=re.MULTILINE)
-            raw = raw.strip()
-            # Find JSON object boundaries
-            start = raw.find("{")
-            end = raw.rfind("}") + 1
-            if start != -1 and end > start:
-                raw = raw[start:end]
-            parsed = json.loads(raw)
+
+            parsed = extract_json(response.content)
+
+            if parsed is None:
+                logger.error(f"Logic mapping: could not extract JSON from: {repr(response.content[:200])}")
+                return ArgumentGraph(nodes=[], edges=[])
 
             nodes = [
                 ArgumentNode(
@@ -103,18 +114,15 @@ class LogicMapperAgent:
                     target_id=e["target_id"],
                     relation=e.get("relation", "supports"),
                 )
-                # Store validation metadata
                 edge.__dict__["validity_score"] = e.get("validity_score", 1.0)
                 edge.__dict__["weakness_note"] = e.get("weakness_note", None)
                 edges.append(edge)
 
             graph = ArgumentGraph(nodes=nodes, edges=edges)
-            # Store extra analysis on the graph
             graph.__dict__["missing_premises"] = parsed.get("missing_premises", [])
             graph.__dict__["has_circular_reasoning"] = parsed.get("has_circular_reasoning", False)
             graph.__dict__["circular_reasoning_note"] = parsed.get("circular_reasoning_note", None)
 
-            # Log weak edges
             weak_edges = [e for e in edges if e.__dict__.get("validity_score", 1.0) < 0.5]
             if weak_edges:
                 logger.info(f"Logic Mapper: {len(weak_edges)} weak reasoning edges detected")
