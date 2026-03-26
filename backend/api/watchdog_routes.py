@@ -42,7 +42,7 @@ watchdog.set_analysis_callback(analysis_triggered_callback)
 
 
 @router.post("/sources")
-async def add_source(request: AddSourceRequest):
+async def add_source(request: AddSourceRequest, current_user: User = Depends(get_current_user)):
     """Add a URL to the watchdog monitoring list."""
     try:
         source = watchdog.add_source(
@@ -64,7 +64,7 @@ async def add_source(request: AddSourceRequest):
 
 
 @router.delete("/sources/{source_id}")
-async def remove_source(source_id: str):
+async def remove_source(source_id: str, current_user: User = Depends(get_current_user)):
     """Stop monitoring a source."""
     removed = watchdog.remove_source(source_id)
     if not removed:
@@ -73,13 +73,13 @@ async def remove_source(source_id: str):
 
 
 @router.get("/sources")
-async def list_sources():
+async def list_sources(current_user: User = Depends(get_current_user)):
     """Get all monitored sources and their status."""
     return watchdog.get_status()
 
 
 @router.get("/sources/{source_id}/alerts")
-async def get_alerts(source_id: str):
+async def get_alerts(source_id: str, current_user: User = Depends(get_current_user)):
     """Get all alerts for a specific source."""
     if source_id not in watchdog.sources:
         raise HTTPException(status_code=404, detail=f"Source {source_id} not found")
@@ -93,7 +93,7 @@ async def get_alerts(source_id: str):
 
 
 @router.post("/sources/{source_id}/check-now")
-async def check_now(source_id: str):
+async def check_now(source_id: str, current_user: User = Depends(get_current_user)):
     """Manually trigger an immediate check for a source."""
     if source_id not in watchdog.sources:
         raise HTTPException(status_code=404, detail=f"Source {source_id} not found")

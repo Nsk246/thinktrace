@@ -29,6 +29,20 @@ settings = get_settings()
 async def lifespan(app: FastAPI):
     logger.info("ThinkTrace starting up...")
     logger.info(f"Environment: {settings.app_env}")
+
+    # Validate critical config on startup
+    missing = []
+    if not settings.anthropic_api_key:
+        missing.append("ANTHROPIC_API_KEY")
+    if not settings.app_secret_key or len(settings.app_secret_key) < 32:
+        missing.append("APP_SECRET_KEY (must be 32+ chars)")
+    if not settings.redis_url:
+        missing.append("REDIS_URL")
+    if missing:
+        logger.warning(f"Missing or weak config: {', '.join(missing)}")
+        if settings.app_env == "production":
+            raise RuntimeError(f"Cannot start in production with missing config: {missing}")
+
     create_tables()
     logger.info("Database tables created")
     knowledge_graph.connect()
@@ -115,13 +129,16 @@ async def limit_request_size(request: Request, call_next):
         )
     return await call_next(request)
 
-# ── Request timing log ──
+# ── Request ID + timing log ──
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
+    import uuid as _uuid
+    request_id = str(_uuid.uuid4())[:8]
     start = time.time()
     response = await call_next(request)
     duration = round((time.time() - start) * 1000)
-    logger.info(f"{request.method} {request.url.path} {response.status_code} {duration}ms")
+    response.headers["X-Request-ID"] = request_id
+    logger.info(f"[{request_id}] {request.method} {request.url.path} {response.status_code} {duration}ms")
     return response
 
 # ── Global error handler — never expose raw Python errors ──
@@ -141,4 +158,36 @@ app.include_router(eval_router)
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "version": "1.0.0", "env": settings.app_env}
+    """Health check that verifies all critical dependencies."""
+    checks = {}
+
+    # Database
+    try:
+        from core.database import SessionLocal
+        db = SessionLocal()
+        db.execute(__import__("sqlalchemy").text("SELECT 1"))
+        db.close()
+        checks["database"] = "ok"
+    except Exception as e:
+        checks["database"] = f"error: {str(e)[:50]}"
+
+    # Redis
+    try:
+        import redis as redis_lib, ssl
+        r = redis_lib.from_url(
+            settings.redis_url,
+            ssl_cert_reqs=ssl.CERT_NONE,
+            socket_connect_timeout=2,
+        )
+        r.ping()
+        checks["redis"] = "ok"
+    except Exception as e:
+        checks["redis"] = f"error: {str(e)[:50]}"
+
+    all_ok = all(v == "ok" for v in checks.values())
+    return {
+        "status": "ok" if all_ok else "degraded",
+        "version": "1.0.0",
+        "env": settings.app_env,
+        "checks": checks,
+    }
