@@ -171,7 +171,7 @@ export default function Home() {
   const sec = (label: string, title: string, sub?: string) => (
     <div style={{ textAlign: "center", marginBottom: 36 }}>
       <p style={{ fontSize: 11, fontWeight: 600, color: "var(--text4)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}>{label}</p>
-      <h2 style={{ fontSize: 30, fontWeight: 700, color: "var(--text)", letterSpacing: "-0.5px", marginBottom: sub ? 12 : 0 }}>{title}</h2>
+      <h2 style={{ fontSize: 26, fontWeight: 700, color: "var(--text)", letterSpacing: "-0.5px", marginBottom: sub ? 12 : 0 }}>{title}</h2>
       {sub && <p style={{ fontSize: 15, color: "var(--text3)", maxWidth: 480, margin: "0 auto", lineHeight: 1.7 }}>{sub}</p>}
     </div>
   );
@@ -189,7 +189,7 @@ export default function Home() {
           padding: "5px 16px", borderRadius: 100, marginBottom: 28,
         }}>
           <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#22c55e", display: "inline-block" }} />
-          4 specialist AI agents working in parallel
+          4 AI agents · Real-time analysis
         </div>
         <h1 className="hero-title" style={{ marginBottom: 20, color: "var(--text)" }}>
           Is this argument<br />
@@ -198,17 +198,15 @@ export default function Home() {
         <p style={{ fontSize: 18, color: "var(--text2)", maxWidth: 560, margin: "0 auto 14px", lineHeight: 1.75 }}>
           ThinkTrace reads any argument and tells you exactly what is logically flawed, factually wrong, and evidentially weak. In seconds.
         </p>
-        <p style={{ fontSize: 15, color: "var(--text3)", maxWidth: 500, margin: "0 auto", lineHeight: 1.7 }}>
-          Used by researchers, journalists, lawyers, and analysts to stress-test reasoning before it matters.
-        </p>
+
       </div>
 
       {/* HOW IT WORKS STRIP */}
       <div style={{ maxWidth: 960, margin: "44px auto 0", padding: "0 20px" }}>
         <div style={{
           display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))",
-          gap: 1, background: "var(--border)", borderRadius: 18,
-          overflow: "hidden", border: "1.5px solid var(--border)",
+          gap: 0, background: "var(--border)", borderRadius: 18,
+          overflow: "hidden", border: "1px solid var(--border)",
         }}>
           {[
             { step: "01", title: "Submit content", desc: "Paste text, upload a PDF, or drop a URL. ThinkTrace handles everything from there." },
@@ -280,7 +278,14 @@ export default function Home() {
               }}>
                 <input ref={fileRef} type="file" accept=".pdf" style={{ display: "none" }}
                        onChange={e => setFile(e.target.files?.[0] || null)} />
-                <div style={{ fontSize: 36, marginBottom: 12 }}>📄</div>
+                <div style={{ marginBottom: 12, display: "flex", justifyContent: "center" }}>
+                  <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--text3)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    <polyline points="14 2 14 8 20 8"/>
+                    <line x1="16" y1="13" x2="8" y2="13"/>
+                    <line x1="16" y1="17" x2="8" y2="17"/>
+                  </svg>
+                </div>
                 {file ? (
                   <>
                     <p style={{ fontSize: 15, fontWeight: 500, color: "#6366f1", marginBottom: 4 }}>{file.name}</p>
@@ -305,14 +310,11 @@ export default function Home() {
                   }}>{a.name}</span>
                 ))}
               </div>
-              <button onClick={handleAnalyze} disabled={loading || !canAnalyze} style={{
-                padding: "12px 28px", borderRadius: 12, border: "none",
-                background: loading || !canAnalyze ? "var(--bg3)" : "linear-gradient(135deg,#6366f1,#0ea5e9)",
-                color: loading || !canAnalyze ? "var(--text4)" : "#fff",
-                fontSize: 15, fontWeight: 600,
-                cursor: loading || !canAnalyze ? "not-allowed" : "pointer",
-                whiteSpace: "nowrap", transition: "all 0.15s",
-              }}>
+              <button
+                onClick={handleAnalyze}
+                disabled={loading || !canAnalyze}
+                className="btn-primary"
+              >
                 {loading ? "Analyzing..." : "Analyze →"}
               </button>
             </div>
@@ -405,9 +407,9 @@ export default function Home() {
                   <span style={{ fontSize: 12, color: "var(--text3)" }}>
                     Share this report:
                   </span>
-                  <code style={{ fontSize: 11, color: "var(--text2)", background: "var(--bg3)", padding: "4px 10px", borderRadius: 6, border: "1px solid var(--border)" }}>
-                    /report/{analysisId.slice(0, 8)}...
-                  </code>
+                  <span style={{ fontSize: 11, color: "var(--text3)", background: "var(--bg3)", padding: "4px 10px", borderRadius: 6, border: "1px solid var(--border)", fontFamily: "monospace" }}>
+                    {analysisId.slice(0, 8)}...
+                  </span>
                   <button
                     onClick={() => {
                       const url = `${window.location.origin}/report/${analysisId}`;
@@ -570,7 +572,7 @@ export default function Home() {
                 <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
                   {t.items.map(item => (
                     <div key={item} style={{ display: "flex", alignItems: "center", gap: 9 }}>
-                      <div style={{ width: 6, height: 6, borderRadius: "50%", background: "linear-gradient(135deg,#6366f1,#0ea5e9)", flexShrink: 0 }} />
+                      <div style={{ width: 4, height: 4, borderRadius: "50%", background: "#6366f1", flexShrink: 0, marginTop: 1 }} />
                       <span style={{ fontSize: 13, fontWeight: 500, color: "var(--text2)" }}>{item}</span>
                     </div>
                   ))}
