@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { Logo } from "@/components/Logo";
 import { useParams } from "next/navigation";
 import { api } from "@/lib/api";
 import { ScoreBadge } from "@/components/ScoreBadge";
@@ -74,9 +75,8 @@ export default function ReportPage() {
       {/* Report header */}
       <div style={{ borderBottom: "1px solid var(--border)", padding: "16px 20px" }}>
         <div style={{ maxWidth: 800, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
-          <Link href="/" style={{ display: "flex", alignItems: "center", gap: 8, textDecoration: "none" }}>
-            <div style={{ width: 28, height: 28, borderRadius: 7, background: "linear-gradient(135deg,#6366f1,#0ea5e9)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 700, fontSize: 10 }}>TT</div>
-            <span style={{ color: "var(--text)", fontWeight: 600, fontSize: 13 }}>ThinkTrace</span>
+          <Link href="/" style={{ textDecoration: "none" }}>
+            <Logo size={26} />
           </Link>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <span style={{ fontSize: 12, color: "var(--text3)" }}>

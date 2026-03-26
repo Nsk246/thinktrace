@@ -1,35 +1,46 @@
 from celery import Celery
-from celery.utils.log import get_task_logger
 from core.config import get_settings
 import ssl
+import logging
 
+logger = logging.getLogger(__name__)
 settings = get_settings()
-logger = get_task_logger(__name__)
-
-ssl_options = {"ssl_cert_reqs": ssl.CERT_NONE}
 
 celery_app = Celery(
     "thinktrace",
     broker=settings.redis_url,
     backend=settings.redis_url,
-    include=["services.tasks"],
 )
 
 celery_app.conf.update(
+    # SSL for Upstash Redis
+    broker_use_ssl={"ssl_cert_reqs": ssl.CERT_NONE},
+    redis_backend_use_ssl={"ssl_cert_reqs": ssl.CERT_NONE},
+
+    # Serialization
     task_serializer="json",
-    accept_content=["json"],
     result_serializer="json",
-    timezone="UTC",
-    enable_utc=True,
-    task_track_started=True,
-    task_acks_late=True,
-    worker_prefetch_multiplier=1,
-    result_expires=3600,
-    broker_connection_retry_on_startup=True,
-    broker_use_ssl=ssl_options,
-    redis_backend_use_ssl=ssl_options,
+    accept_content=["json"],
+
+    # Reliability
+    task_acks_late=True,           # Only ack after task completes
+    task_reject_on_worker_lost=True,  # Re-queue if worker dies
+    worker_prefetch_multiplier=1,  # One task per worker at a time
+
+    # Timeouts
+    task_soft_time_limit=130,      # Soft limit — task gets SIGTERM
+    task_time_limit=150,           # Hard limit — task gets SIGKILL
+    result_expires=3600,           # Results expire after 1 hour
+
+    # Queue routing
     task_routes={
         "services.tasks.run_analysis_task": {"queue": "analysis"},
-        "services.tasks.run_watchdog_task": {"queue": "watchdog"},
+        "services.tasks.run_watchdog_check": {"queue": "watchdog"},
     },
+
+    # Worker settings
+    worker_max_tasks_per_child=50,  # Recycle worker after 50 tasks (prevents memory leaks)
+    worker_disable_rate_limits=False,
 )
+
+logger.info("Celery configured with reliability settings")

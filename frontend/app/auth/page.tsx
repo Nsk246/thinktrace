@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { Logo } from "@/components/Logo";
 import { useRouter } from "next/navigation";
 import { login, register } from "@/lib/api";
 import { useAuthStore } from "@/lib/store";
@@ -66,12 +67,9 @@ export default function AuthPage() {
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "60px 20px" }}>
         <div style={{ width: "100%", maxWidth: 400 }}>
           <div style={{ textAlign: "center", marginBottom: 32 }}>
-            <div style={{
-              width: 52, height: 52, borderRadius: 14,
-              background: "linear-gradient(135deg,#6366f1,#0ea5e9)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              margin: "0 auto 16px", color: "#fff", fontWeight: 800, fontSize: 16,
-            }}>TT</div>
+            <div style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
+              <Logo size={48} showText={false} />
+            </div>
             <h1 style={{ fontSize: 22, fontWeight: 700, color: "var(--text)", marginBottom: 6, letterSpacing: "-.5px" }}>
               {mode === "login" ? "Welcome back" : "Create account"}
             </h1>

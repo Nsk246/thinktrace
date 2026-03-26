@@ -5,6 +5,7 @@ import { ScoreBadge } from "@/components/ScoreBadge";
 import { FallacyCard } from "@/components/FallacyCard";
 import { FactCheckCard } from "@/components/FactCheckCard";
 import { Navbar } from "@/components/Navbar";
+import { IconSearch, IconFileText, IconGlobe, IconEye, IconFlask, IconUsers, IconNewspaper, IconGraduationCap, IconScale, IconBriefcase } from "@/components/Icons";
 
 type Tab = "text" | "pdf" | "url";
 type ResultTab = "fallacies" | "factchecks" | "graph";
@@ -45,10 +46,10 @@ const agents = [
 ];
 
 const useCases = [
-  { icon: "📰", title: "News and media", desc: "Spot misinformation and weak reasoning in articles before sharing them." },
-  { icon: "🎓", title: "Academic research", desc: "Audit papers and essays for logical consistency and evidential gaps." },
-  { icon: "⚖️", title: "Legal and policy", desc: "Stress-test arguments in briefs, proposals, and policy documents." },
-  { icon: "💼", title: "Business decisions", desc: "Evaluate pitches, reports, and proposals before committing resources." },
+  { Icon: IconNewspaper, title: "News and media", desc: "Spot misinformation and weak reasoning in articles before sharing them." },
+  { Icon: IconGraduationCap, title: "Academic research", desc: "Audit papers and essays for logical consistency and evidential gaps." },
+  { Icon: IconScale, title: "Legal and policy", desc: "Stress-test arguments in briefs, proposals, and policy documents." },
+  { Icon: IconBriefcase, title: "Business decisions", desc: "Evaluate pitches, reports, and proposals before committing resources." },
 ];
 
 const techStack = [
@@ -548,7 +549,9 @@ export default function Home() {
         <div style={grid4}>
           {useCases.map(u => (
             <div key={u.title} className="card" style={{ padding: "24px 22px" }}>
-              <div style={{ fontSize: 30, marginBottom: 14 }}>{u.icon}</div>
+              <div style={{ marginBottom: 14, color: "var(--text3)" }}>
+                <u.Icon size={26} color="var(--text2)" />
+              </div>
               <div style={{ fontSize: 16, fontWeight: 600, color: "var(--text)", marginBottom: 8 }}>{u.title}</div>
               <div style={{ fontSize: 13, color: "var(--text3)", lineHeight: 1.7 }}>{u.desc}</div>
             </div>

@@ -371,12 +371,34 @@ class FactCheckerAgent:
         checkable = [
             c for c in claim_tree.claims
             if c.claim_type in ("premise", "sub_claim")
-        ][:8]
+        ][:6]  # Limit to 6 for speed
 
-        results = []
-        for claim in checkable:
-            result = fact_check_single_claim(claim)
-            results.append(result)
-            logger.info(f"Fact check result: {result.verdict} ({result.confidence:.0%}) — {claim.text[:50]}")
+        if not checkable:
+            return []
 
-        return results
+        # Run fact checks in parallel — major speed improvement
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        results = [None] * len(checkable)
+
+        with ThreadPoolExecutor(max_workers=3) as executor:
+            future_to_idx = {
+                executor.submit(fact_check_single_claim, claim): i
+                for i, claim in enumerate(checkable)
+            }
+            for future in as_completed(future_to_idx):
+                idx = future_to_idx[future]
+                try:
+                    result = future.result(timeout=25)
+                    results[idx] = result
+                    logger.info(f"Fact check result: {result.verdict} ({result.confidence:.0%}) — {checkable[idx].text[:50]}")
+                except Exception as e:
+                    logger.error(f"Fact check failed for claim {idx}: {e}")
+                    results[idx] = FactCheckResult(
+                        claim_id=checkable[idx].id,
+                        verdict="unverifiable",
+                        confidence=0.3,
+                        sources=[],
+                        explanation="Fact check timed out or failed.",
+                    )
+
+        return [r for r in results if r is not None]

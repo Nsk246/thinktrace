@@ -17,8 +17,95 @@ router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 
-# In-memory token blacklist (use Redis in production)
-_token_blacklist: set = set()
+MAX_ATTEMPTS = 5
+LOCKOUT_SECONDS = 300
+
+
+def get_redis():
+    """Get Redis client — falls back to in-memory if Redis unavailable."""
+    try:
+        import redis as redis_lib
+        import ssl
+        r = redis_lib.from_url(
+            settings.redis_url,
+            decode_responses=True,
+            ssl_cert_reqs=ssl.CERT_NONE,
+            socket_connect_timeout=3,
+            socket_timeout=3,
+        )
+        r.ping()
+        return r
+    except Exception as e:
+        logger.warning(f"Redis unavailable for auth: {e} — using in-memory fallback")
+        return None
+
+
+# In-memory fallbacks (used when Redis is unavailable)
+_token_blacklist_memory: set = set()
+_failed_attempts_memory: dict = {}
+
+
+def is_token_blacklisted(token: str) -> bool:
+    r = get_redis()
+    if r:
+        return bool(r.exists(f"blacklist:{token}"))
+    return token in _token_blacklist_memory
+
+
+def blacklist_token(token: str, expire_seconds: int = 86400):
+    r = get_redis()
+    if r:
+        r.setex(f"blacklist:{token}", expire_seconds, "1")
+    else:
+        _token_blacklist_memory.add(token)
+
+
+def check_brute_force(email: str):
+    import time
+    r = get_redis()
+    if r:
+        key = f"login_attempts:{email}"
+        attempts = int(r.get(key) or 0)
+        if attempts >= MAX_ATTEMPTS:
+            ttl = r.ttl(key)
+            raise HTTPException(
+                status_code=429,
+                detail=f"Too many failed attempts. Please wait {ttl} seconds before trying again."
+            )
+    else:
+        now = time.time()
+        attempts = _failed_attempts_memory.get(email, [])
+        recent = [t for t in attempts if now - t < LOCKOUT_SECONDS]
+        _failed_attempts_memory[email] = recent
+        if len(recent) >= MAX_ATTEMPTS:
+            wait = int(LOCKOUT_SECONDS - (now - recent[0]))
+            raise HTTPException(
+                status_code=429,
+                detail=f"Too many failed attempts. Please wait {wait} seconds before trying again."
+            )
+
+
+def record_failed_attempt(email: str):
+    import time
+    r = get_redis()
+    if r:
+        key = f"login_attempts:{email}"
+        pipe = r.pipeline()
+        pipe.incr(key)
+        pipe.expire(key, LOCKOUT_SECONDS)
+        pipe.execute()
+    else:
+        attempts = _failed_attempts_memory.get(email, [])
+        attempts.append(time.time())
+        _failed_attempts_memory[email] = attempts
+
+
+def clear_failed_attempts(email: str):
+    r = get_redis()
+    if r:
+        r.delete(f"login_attempts:{email}")
+    else:
+        _failed_attempts_memory.pop(email, None)
 
 
 class RegisterRequest(BaseModel):
@@ -59,7 +146,6 @@ class LoginRequest(BaseModel):
 
 
 def hash_password(password: str) -> str:
-    # Truncate to 72 bytes to handle bcrypt limit explicitly
     return pwd_context.hash(password[:72].encode("utf-8"))
 
 
@@ -81,7 +167,7 @@ def get_current_user(
     token: str = Depends(oauth2_scheme),
     db: Session = Depends(get_db),
 ) -> User:
-    if token in _token_blacklist:
+    if is_token_blacklisted(token):
         raise HTTPException(status_code=401, detail="Token has been revoked. Please sign in again.")
     try:
         payload = jwt.decode(token, settings.app_secret_key, algorithms=["HS256"])
@@ -104,10 +190,8 @@ def require_admin(current_user: User = Depends(get_current_user)) -> User:
 
 @router.post("/register")
 async def register(req: RegisterRequest, db: Session = Depends(get_db)):
-    # Check duplicate email
     if db.query(User).filter(User.email == req.email).first():
         raise HTTPException(status_code=400, detail="An account with this email already exists")
-
     try:
         org = Organization(
             id=str(uuid.uuid4()),
@@ -116,7 +200,6 @@ async def register(req: RegisterRequest, db: Session = Depends(get_db)):
         )
         db.add(org)
         db.flush()
-
         user = User(
             id=str(uuid.uuid4()),
             email=req.email,
@@ -127,7 +210,6 @@ async def register(req: RegisterRequest, db: Session = Depends(get_db)):
         )
         db.add(user)
         db.commit()
-
         token = create_token(user.id, org.id, user.role)
         logger.info(f"New user registered: {req.email} (org: {org.id})")
         return {
@@ -145,15 +227,15 @@ async def register(req: RegisterRequest, db: Session = Depends(get_db)):
 
 @router.post("/login")
 async def login(req: LoginRequest, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.email == req.email.lower().strip()).first()
-    # Use constant-time comparison to prevent timing attacks
+    email = req.email.lower().strip()
+    check_brute_force(email)
+    user = db.query(User).filter(User.email == email).first()
     if not user or not verify_password(req.password, user.hashed_password):
-        raise HTTPException(
-            status_code=401,
-            detail="Incorrect email or password"
-        )
+        record_failed_attempt(email)
+        raise HTTPException(status_code=401, detail="Incorrect email or password")
+    clear_failed_attempts(email)
     token = create_token(user.id, user.org_id, user.role)
-    logger.info(f"User logged in: {req.email}")
+    logger.info(f"User logged in: {email}")
     return {
         "access_token": token,
         "token_type": "bearer",
@@ -165,7 +247,7 @@ async def login(req: LoginRequest, db: Session = Depends(get_db)):
 
 @router.post("/logout")
 async def logout(token: str = Depends(oauth2_scheme)):
-    _token_blacklist.add(token)
+    blacklist_token(token)
     return {"message": "Logged out successfully"}
 
 

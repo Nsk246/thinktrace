@@ -1,16 +1,17 @@
 "use client";
 import { useEffect, useState } from "react";
+import { IconSearch, IconFileText, IconGlobe, IconEye, IconFlask, IconUsers } from "@/components/Icons";
 import { getDashboard, getEvalResults } from "@/lib/api";
 import { Navbar } from "@/components/Navbar";
 import Link from "next/link";
 
 const capabilities = [
-  { title: "Analyze text", desc: "Audit any argument instantly", href: "/", icon: "🔍" },
-  { title: "PDF upload", desc: "Analyze research papers", href: "/", icon: "📄" },
-  { title: "URL analysis", desc: "Analyze webpages and videos", href: "/", icon: "🌐" },
-  { title: "Watchdog", desc: "Monitor URLs autonomously", href: "/watchdog", icon: "👁" },
-  { title: "Eval suite", desc: "Run LLM evaluation tests", href: "/evals", icon: "🧪" },
-  { title: "Team", desc: "Manage org members", href: "/team", icon: "👥" },
+  { title: "Analyze text", desc: "Audit any argument instantly", href: "/", Icon: IconSearch },
+  { title: "PDF upload", desc: "Analyze research papers", href: "/", Icon: IconFileText },
+  { title: "URL analysis", desc: "Analyze webpages and videos", href: "/", Icon: IconGlobe },
+  { title: "Watchdog", desc: "Monitor URLs autonomously", href: "/watchdog", Icon: IconEye },
+  { title: "Eval suite", desc: "Run LLM evaluation tests", href: "/evals", Icon: IconFlask },
+  { title: "Team", desc: "Manage org members", href: "/team", Icon: IconUsers },
 ];
 
 export default function Dashboard() {
@@ -78,7 +79,7 @@ export default function Dashboard() {
             {capabilities.map(c => (
               <Link key={c.title} href={c.href} style={{ textDecoration: "none" }}>
                 <div className="card card-hover" style={{ padding: "16px", cursor: "pointer" }}>
-                  <div style={{ fontSize: 22, marginBottom: 8 }}>{c.icon}</div>
+                  <div style={{ marginBottom: 10, color: "var(--text3)" }}><c.Icon size={22} color="var(--text2)" /></div>
                   <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text)", marginBottom: 3 }}>{c.title}</div>
                   <div style={{ fontSize: 12, color: "var(--text3)" }}>{c.desc}</div>
                 </div>

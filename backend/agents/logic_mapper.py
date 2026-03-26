@@ -72,12 +72,19 @@ class LogicMapperAgent:
 
         try:
             response = llm.invoke([
-                SystemMessage(content="You are an expert logician. Return only valid JSON."),
+                SystemMessage(content="You are an expert logician. Return only valid JSON with no markdown, no backticks, no explanation."),
                 HumanMessage(content=MAPPING_PROMPT.format(claims=claims_text)),
             ])
             raw = response.content.strip()
-            raw = re.sub(r"^```(?:json)?", "", raw, flags=re.MULTILINE).strip()
-            raw = re.sub(r"```$", "", raw, flags=re.MULTILINE).strip()
+            # Aggressively clean markdown
+            raw = re.sub(r"^```(?:json)?\s*", "", raw, flags=re.MULTILINE)
+            raw = re.sub(r"\s*```$", "", raw, flags=re.MULTILINE)
+            raw = raw.strip()
+            # Find JSON object boundaries
+            start = raw.find("{")
+            end = raw.rfind("}") + 1
+            if start != -1 and end > start:
+                raw = raw[start:end]
             parsed = json.loads(raw)
 
             nodes = [

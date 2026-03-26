@@ -1,0 +1,79 @@
+services:
+  - type: web
+    name: thinktrace-api
+    env: python
+    region: oregon
+    plan: starter
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn main:app -c gunicorn.conf.py
+    healthCheckPath: /health
+    envVars:
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: APP_SECRET_KEY
+        sync: false
+      - key: LANGCHAIN_API_KEY
+        sync: false
+      - key: LANGCHAIN_TRACING_V2
+        value: "true"
+      - key: LANGCHAIN_PROJECT
+        value: thinktrace
+      - key: PINECONE_API_KEY
+        sync: false
+      - key: PINECONE_INDEX_NAME
+        value: thinktrace
+      - key: NEO4J_URI
+        sync: false
+      - key: NEO4J_USER
+        sync: false
+      - key: NEO4J_PASSWORD
+        sync: false
+      - key: SERPER_API_KEY
+        sync: false
+      - key: NEWS_API_KEY
+        sync: false
+      - key: APP_ENV
+        value: production
+      - key: WEB_CONCURRENCY
+        value: "4"
+
+  - type: worker
+    name: thinktrace-worker
+    env: python
+    region: oregon
+    plan: starter
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: celery -A services.celery_app.celery_app worker --loglevel=info --queues=analysis,watchdog --concurrency=4 --max-tasks-per-child=50
+    envVars:
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: APP_ENV
+        value: production
+
+  - type: web
+    name: thinktrace-frontend
+    env: node
+    region: oregon
+    plan: starter
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NEXT_PUBLIC_API_URL
+        sync: false
+
+databases:
+  - name: thinktrace-db
+    plan: starter
+    databaseName: thinktrace
+    user: thinktrace

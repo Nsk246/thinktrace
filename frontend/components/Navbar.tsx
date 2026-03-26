@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import { Logo } from "@/components/Logo";
 import { usePathname } from "next/navigation";
 import { useTheme } from "@/components/ThemeProvider";
 import { useAuthStore } from "@/lib/store";
@@ -53,14 +54,8 @@ export function Navbar() {
           justifyContent: "space-between", gap: 12,
         }}>
           {/* Logo */}
-          <Link href="/" style={{ display: "flex", alignItems: "center", gap: 8, textDecoration: "none", flexShrink: 0 }}>
-            <div style={{
-              width: 30, height: 30, borderRadius: 8,
-              background: "linear-gradient(135deg,#6366f1,#0ea5e9)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              color: "#fff", fontWeight: 700, fontSize: 11,
-            }}>TT</div>
-            <span style={{ color: "var(--text)", fontWeight: 600, fontSize: 14, letterSpacing: "-.3px" }}>ThinkTrace</span>
+          <Link href="/" style={{ textDecoration: "none", flexShrink: 0 }}>
+            <Logo size={28} />
           </Link>
 
           {/* Desktop nav links */}

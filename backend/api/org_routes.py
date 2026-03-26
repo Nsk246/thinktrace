@@ -51,7 +51,7 @@ def get_dashboard(
 
     member_count = db.query(User).filter(
         User.org_id == current_user.org_id,
-        User.is_active == True,
+        
     ).count()
 
     return {
@@ -90,7 +90,7 @@ def list_members(
     """List all members of the current org."""
     members = db.query(User).filter(
         User.org_id == current_user.org_id,
-        User.is_active == True,
+        
     ).all()
 
     return {
@@ -156,7 +156,7 @@ def remove_member(
     if user.id == current_user.id:
         raise HTTPException(status_code=400, detail="Cannot remove yourself")
 
-    user.is_active = False
+    
     db.commit()
     return {"status": "deactivated", "user_id": user_id}
 

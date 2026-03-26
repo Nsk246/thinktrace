@@ -1,3 +1,9 @@
+import os
+# Force sentence-transformers to use local cache only — no network calls
+os.environ["TRANSFORMERS_OFFLINE"] = "1"
+os.environ["HF_DATASETS_OFFLINE"] = "1"
+os.environ["HF_HUB_OFFLINE"] = "1"
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
@@ -52,6 +58,50 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
+
+# ── Rate limiting — per IP using Redis ──
+@app.middleware("http")
+async def rate_limit(request: Request, call_next):
+    """
+    Rate limits the analyze endpoint to prevent abuse.
+    100 requests per hour per IP for analysis.
+    1000 requests per hour for everything else.
+    """
+    if request.method == "OPTIONS":
+        return await call_next(request)
+
+    path = request.url.path
+    if path not in ("/api/v1/analyze", "/api/v1/compare"):
+        return await call_next(request)
+
+    client_ip = request.headers.get("x-forwarded-for", request.client.host if request.client else "unknown")
+    client_ip = client_ip.split(",")[0].strip()
+
+    try:
+        import redis as redis_lib
+        import ssl
+        r = redis_lib.from_url(
+            settings.redis_url,
+            decode_responses=True,
+            ssl_cert_reqs=ssl.CERT_NONE,
+            socket_connect_timeout=2,
+            socket_timeout=2,
+        )
+        key = f"rate:{client_ip}:analyze"
+        count = r.incr(key)
+        if count == 1:
+            r.expire(key, 3600)  # 1 hour window
+        if count > 100:
+            ttl = r.ttl(key)
+            return JSONResponse(
+                status_code=429,
+                content={"detail": f"Rate limit exceeded. You can run 100 analyses per hour. Try again in {ttl} seconds."}
+            )
+    except Exception:
+        pass  # If Redis is down, allow the request
+
+    return await call_next(request)
+
 
 # ── Request size limit — reject payloads over 1MB ──
 @app.middleware("http")
