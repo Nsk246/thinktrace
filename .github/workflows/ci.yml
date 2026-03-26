@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  backend:
+    name: Backend checks
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Check imports
+        run: python -c "import fastapi, sqlalchemy, celery, langchain_anthropic, pinecone; print('All imports OK')"
+
+      - name: Syntax check
+        run: |
+          python -m py_compile main.py
+          python -m py_compile api/routes.py
+          python -m py_compile api/auth.py
+          python -m py_compile core/database.py
+          python -m py_compile agents/fact_checker.py
+          python -m py_compile agents/logic_mapper.py
+          python -m py_compile agents/fallacy_hunter.py
+          python -m py_compile agents/epistemic_scorer.py
+          python -m py_compile agents/ingestion.py
+          echo "All syntax checks passed"
+
+  frontend:
+    name: Frontend build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:8000
