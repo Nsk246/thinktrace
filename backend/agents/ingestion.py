@@ -214,7 +214,61 @@ class IngestionAgent:
             logger.error(f"PDF extraction failed: {e}")
             return ""
 
-    def _extract_url(self, url: str) -> str:
+    def _is_youtube_url(self, url: str) -> bool:
+        return any(domain in url for domain in [
+            "youtube.com/watch", "youtu.be/", "youtube.com/shorts/"
+        ])
+
+    def _extract_youtube(self, url: str) -> str:
+        try:
+            from youtube_transcript_api import YouTubeTranscriptApi
+            import re
+
+            # Extract video ID from various YouTube URL formats
+            patterns = [
+                r"(?:v=)([a-zA-Z0-9_-]{11})",
+                r"youtu[.]be/([a-zA-Z0-9_-]{11})",
+                r"shorts/([a-zA-Z0-9_-]{11})",
+            ]
+            video_id = None
+            for pattern in patterns:
+                match = re.search(pattern, url)
+                if match:
+                    video_id = match.group(1)
+                    break
+
+            if not video_id:
+                logger.error(f"Could not extract YouTube video ID from: {url}")
+                return self._extract_url_html(url)
+
+            # Fetch transcript — try English first, fall back to any available
+            try:
+                transcript_list = YouTubeTranscriptApi.get_transcript(video_id, languages=["en"])
+            except Exception:
+                try:
+                    transcripts = YouTubeTranscriptApi.list_transcripts(video_id)
+                    transcript = transcripts.find_a_transcript(["en", "en-US", "en-GB"])
+                    transcript_list = transcript.fetch()
+                except Exception:
+                    # Last resort — auto-generated
+                    transcripts = YouTubeTranscriptApi.list_transcripts(video_id)
+                    transcript_list = list(transcripts)[0].fetch()
+
+            # Join transcript segments into clean text
+            text = " ".join(seg["text"] for seg in transcript_list)
+            # Clean up common transcript artifacts
+            text = re.sub(r"\[.*?\]", "", text)  # Remove [Music], [Applause] etc
+            text = re.sub(r"\s+", " ", text).strip()
+
+            logger.info(f"YouTube transcript extracted: {len(text)} chars from video {video_id}")
+            return text[:6000]
+
+        except Exception as e:
+            logger.error(f"YouTube transcript extraction failed: {e} — falling back to HTML")
+            return self._extract_url_html(url)
+
+    def _extract_url_html(self, url: str) -> str:
+        """Extract text from a regular webpage."""
         try:
             headers = {"User-Agent": "Mozilla/5.0 ThinkTrace/1.0"}
             resp = httpx.get(url, headers=headers, timeout=15, follow_redirects=True)
@@ -226,3 +280,10 @@ class IngestionAgent:
         except Exception as e:
             logger.error(f"URL extraction failed: {e}")
             return url
+
+    def _extract_url(self, url: str) -> str:
+        """Route URL to appropriate extractor."""
+        if self._is_youtube_url(url):
+            logger.info(f"YouTube URL detected — extracting transcript")
+            return self._extract_youtube(url)
+        return self._extract_url_html(url)
