@@ -1,4 +1,6 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
+from api.auth import get_current_user
+from core.database import User
 from pydantic import BaseModel
 from agents.watchdog import watchdog
 from services.tasks import run_analysis_task
