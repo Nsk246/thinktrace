@@ -181,24 +181,11 @@ async def analyze(request: AnalysisRequest):
     try:
         import asyncio
         loop = asyncio.get_event_loop()
-        # Run analysis with 120 second timeout
-        try:
-            claim_tree = await asyncio.wait_for(
-                loop.run_in_executor(None, lambda: ingestion_agent.run(
-                    content=request.content,
-                    content_type=request.content_type,
-                )),
-                timeout=120.0
-            )
-            result = await asyncio.wait_for(
-                loop.run_in_executor(None, lambda: run_full_analysis(claim_tree)),
-                timeout=120.0
-            )
-        except asyncio.TimeoutError:
-            raise HTTPException(
-                status_code=408,
-                detail="Analysis timed out after 120 seconds. Try with shorter content."
-            )
+        claim_tree = await loop.run_in_executor(None, lambda: ingestion_agent.run(
+            content=request.content,
+            content_type=request.content_type,
+        ))
+        result = await loop.run_in_executor(None, lambda: run_full_analysis(claim_tree))
         save_analysis_record(result, request)
         return {
             "status": result.status,

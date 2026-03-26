@@ -47,6 +47,20 @@ async def lifespan(app: FastAPI):
     logger.info("Database tables created")
     knowledge_graph.connect()
     logger.info("Knowledge graph initialized")
+
+    # Preload sentence transformer at startup so first analysis is fast
+    try:
+        from services.pinecone_service import get_embedder
+        embedder = get_embedder()
+        if embedder:
+            # Warm up with a dummy encode
+            embedder.encode("warmup", normalize_embeddings=True)
+            logger.info("Sentence transformer preloaded and warmed up")
+        else:
+            logger.warning("Sentence transformer not available — using hash embeddings")
+    except Exception as e:
+        logger.warning(f"Sentence transformer preload failed: {e}")
+
     yield
     logger.info("ThinkTrace shutting down...")
     knowledge_graph.close()
