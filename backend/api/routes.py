@@ -178,6 +178,35 @@ async def analyze(request: AnalysisRequest):
             cached["cached"] = True
             return cached
 
+    # Rate limit per org — 10 analyses per month on free tier
+    if request.org_id and request.org_id != "default":
+        try:
+            import redis as redis_lib, ssl, calendar
+            from datetime import datetime
+            r = redis_lib.from_url(
+                settings.redis_url,
+                decode_responses=True,
+                ssl_cert_reqs=ssl.CERT_NONE,
+                socket_connect_timeout=2,
+            )
+            month_key = f"usage:{request.org_id}:{datetime.utcnow().strftime('%Y-%m')}"
+            count = int(r.get(month_key) or 0)
+            if count >= 50:
+                raise HTTPException(
+                    status_code=429,
+                    detail=f"Monthly limit reached. Your workspace has used 50 analyses this month. Limit resets on the 1st."
+                )
+            r.incr(month_key)
+            # Expire at end of month
+            now = datetime.utcnow()
+            days_in_month = calendar.monthrange(now.year, now.month)[1]
+            seconds_left = (days_in_month - now.day) * 86400 + (86400 - now.hour * 3600)
+            r.expire(month_key, seconds_left)
+        except HTTPException:
+            raise
+        except Exception:
+            pass  # If Redis is down, allow the request
+
     try:
         import asyncio
         loop = asyncio.get_event_loop()

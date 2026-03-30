@@ -9,6 +9,7 @@ from jose import JWTError, jwt
 from datetime import datetime, timedelta
 import uuid
 import re
+import random
 import logging
 
 logger = logging.getLogger(__name__)
@@ -19,10 +20,10 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 
 MAX_ATTEMPTS = 5
 LOCKOUT_SECONDS = 300
+OTP_EXPIRE_SECONDS = 600  # 10 minutes
 
 
 def get_redis():
-    """Get Redis client — falls back to in-memory if Redis unavailable."""
     try:
         import redis as redis_lib
         import ssl
@@ -40,9 +41,9 @@ def get_redis():
         return None
 
 
-# In-memory fallbacks (used when Redis is unavailable)
 _token_blacklist_memory: set = set()
 _failed_attempts_memory: dict = {}
+_otp_memory: dict = {}  # fallback for OTP when Redis is down
 
 
 def is_token_blacklisted(token: str) -> bool:
@@ -108,6 +109,89 @@ def clear_failed_attempts(email: str):
         _failed_attempts_memory.pop(email, None)
 
 
+def store_otp(email: str, otp: str, pending_data: dict):
+    """Store OTP + pending registration data in Redis for 10 minutes."""
+    import json
+    r = get_redis()
+    key = f"otp:{email}"
+    data = json.dumps({"otp": otp, **pending_data})
+    if r:
+        r.setex(key, OTP_EXPIRE_SECONDS, data)
+    else:
+        import time
+        _otp_memory[email] = {"data": data, "expires": time.time() + OTP_EXPIRE_SECONDS}
+
+
+def verify_otp(email: str, otp: str, consume: bool = False) -> dict | None:
+    """
+    Verify OTP and return pending data if valid.
+    Only deletes the OTP when consume=True (after successful account creation).
+    """
+    import json, time
+    r = get_redis()
+    key = f"otp:{email}"
+    if r:
+        raw = r.get(key)
+        if not raw:
+            return None
+        data = json.loads(raw)
+        if data.get("otp") != otp:
+            return None
+        if consume:
+            r.delete(key)  # Only delete after successful use
+        return data
+    else:
+        entry = _otp_memory.get(email)
+        if not entry or entry["expires"] < time.time():
+            return None
+        data = json.loads(entry["data"])
+        if data.get("otp") != otp:
+            return None
+        if consume:
+            del _otp_memory[email]
+        return data
+
+
+def send_otp_email(email: str, otp: str, full_name: str) -> bool:
+    """Send OTP via Resend."""
+    try:
+        import resend
+        resend.api_key = settings.resend_api_key
+        resend.Emails.send({
+            "from": "noreply@nandhusk.dev",
+            "to": email,
+            "subject": "Your ThinkTrace verification code",
+            "html": f"""
+            <div style="font-family: system-ui, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 24px;">
+              <div style="margin-bottom: 24px;">
+                <h1 style="font-size: 20px; font-weight: 700; color: #09090b; margin: 0 0 4px;">ThinkTrace</h1>
+                <p style="color: #71717a; font-size: 14px; margin: 0;">AI Reasoning Audit Platform</p>
+              </div>
+              <h2 style="font-size: 18px; font-weight: 600; color: #09090b; margin: 0 0 8px;">
+                Verify your email, {full_name.split()[0]}
+              </h2>
+              <p style="color: #52525b; font-size: 14px; line-height: 1.6; margin: 0 0 24px;">
+                Enter this code to complete your registration. It expires in 10 minutes.
+              </p>
+              <div style="background: #f4f4f5; border-radius: 12px; padding: 24px; text-align: center; margin-bottom: 24px;">
+                <span style="font-size: 36px; font-weight: 800; letter-spacing: 8px; color: #6366f1; font-family: monospace;">
+                  {otp}
+                </span>
+              </div>
+              <p style="color: #71717a; font-size: 13px; margin: 0;">
+                If you did not request this, you can safely ignore this email.
+                Check your spam folder if you do not see this email.
+              </p>
+            </div>
+            """
+        })
+        logger.info(f"OTP email sent to {email}")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to send OTP email: {e}")
+        return False
+
+
 class RegisterRequest(BaseModel):
     email: str
     password: str
@@ -138,6 +222,11 @@ class RegisterRequest(BaseModel):
         if len(v.strip()) < 2:
             raise ValueError("Full name must be at least 2 characters")
         return v.strip()
+
+
+class VerifyOTPRequest(BaseModel):
+    email: str
+    otp: str
 
 
 class LoginRequest(BaseModel):
@@ -190,28 +279,78 @@ def require_admin(current_user: User = Depends(get_current_user)) -> User:
 
 @router.post("/register")
 async def register(req: RegisterRequest, db: Session = Depends(get_db)):
+    """Step 1: Validate details and send OTP email."""
     if db.query(User).filter(User.email == req.email).first():
         raise HTTPException(status_code=400, detail="An account with this email already exists")
+
+    # Generate 6-digit OTP
+    otp = str(random.randint(100000, 999999))
+
+    # Store pending registration data
+    store_otp(req.email, otp, {
+        "password": hash_password(req.password),
+        "full_name": req.full_name,
+        "org_name": req.org_name,
+    })
+
+    # Send OTP email
+    sent = send_otp_email(req.email, otp, req.full_name)
+    if not sent:
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to send verification email. Please try again."
+        )
+
+    logger.info(f"OTP sent to {req.email}")
+    return {
+        "message": "Verification code sent to your email. Please check your inbox and spam folder.",
+        "email": req.email,
+        "expires_in": OTP_EXPIRE_SECONDS,
+    }
+
+
+@router.post("/verify-otp")
+async def verify_otp_endpoint(req: VerifyOTPRequest, db: Session = Depends(get_db)):
+    """Step 2: Verify OTP and create the account."""
+    email = req.email.lower().strip()
+    otp = req.otp.strip()
+
+    # First verify without consuming
+    pending = verify_otp(email, otp, consume=False)
+    if not pending:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid or expired verification code. Please request a new one."
+        )
+
+    # Double-check email not taken during OTP window
+    if db.query(User).filter(User.email == email).first():
+        raise HTTPException(status_code=400, detail="An account with this email already exists")
+
     try:
+        # Now consume the OTP — account creation is about to happen
+        verify_otp(email, otp, consume=True)
         org = Organization(
             id=str(uuid.uuid4()),
-            name=req.org_name.strip(),
-            slug=req.org_name.lower().strip().replace(" ", "-")[:20] + "-" + str(uuid.uuid4())[:8],
+            name=pending["org_name"].strip(),
+            slug=pending["org_name"].lower().strip().replace(" ", "-")[:20] + "-" + str(uuid.uuid4())[:8],
         )
         db.add(org)
         db.flush()
+
         user = User(
             id=str(uuid.uuid4()),
-            email=req.email,
-            full_name=req.full_name,
-            hashed_password=hash_password(req.password),
+            email=email,
+            full_name=pending["full_name"],
+            hashed_password=pending["password"],
             org_id=org.id,
             role="admin",
         )
         db.add(user)
         db.commit()
+
         token = create_token(user.id, org.id, user.role)
-        logger.info(f"New user registered: {req.email} (org: {org.id})")
+        logger.info(f"Account created after OTP verification: {email} (org: {org.id})")
         return {
             "access_token": token,
             "token_type": "bearer",
@@ -221,8 +360,35 @@ async def register(req: RegisterRequest, db: Session = Depends(get_db)):
         }
     except Exception as e:
         db.rollback()
-        logger.error(f"Registration error: {e}")
-        raise HTTPException(status_code=500, detail="Registration failed. Please try again.")
+        logger.error(f"Account creation error: {e}")
+        raise HTTPException(status_code=500, detail="Account creation failed. Please try again.")
+
+
+@router.post("/resend-otp")
+async def resend_otp(email: str, db: Session = Depends(get_db)):
+    """Resend OTP if user did not receive it."""
+    email = email.lower().strip()
+    if db.query(User).filter(User.email == email).first():
+        raise HTTPException(status_code=400, detail="Account already exists")
+
+    import json
+    r = get_redis()
+    key = f"otp:{email}"
+    raw = r.get(key) if r else None
+    if not raw:
+        raise HTTPException(
+            status_code=400,
+            detail="No pending registration found. Please start registration again."
+        )
+
+    data = json.loads(raw)
+    otp = str(random.randint(100000, 999999))
+    data["otp"] = otp
+    if r:
+        r.setex(key, OTP_EXPIRE_SECONDS, json.dumps(data))
+
+    send_otp_email(email, otp, data.get("full_name", "there"))
+    return {"message": "New verification code sent. Check your inbox and spam folder."}
 
 
 @router.post("/login")
