@@ -75,7 +75,16 @@ app = FastAPI(
 )
 
 # ── CORS — lock to frontend domain in production ──
-allowed_origins = ["*"] if settings.app_env == "development" else [
+import os as _os
+_codespace = _os.getenv("CODESPACE_NAME", "")
+_allowed_dev = ["*"] if not _codespace else [
+    f"https://{_codespace}-3000.app.github.dev",
+    f"https://{_codespace}-8000.app.github.dev",
+    "http://localhost:3000",
+    "http://localhost:8000",
+    "*",
+]
+allowed_origins = _allowed_dev if settings.app_env == "development" else [
     "https://thinktrace-frontend.onrender.com",
     "https://thinktrace.onrender.com",
 ]
@@ -121,7 +130,12 @@ def check_rate_limit(r, key: str, limit: int, window: int, detail: str):
             ttl = r.ttl(key)
             return JSONResponse(
                 status_code=429,
-                content={"detail": f"{detail} Try again in {ttl} seconds."}
+                content={"detail": f"{detail} Try again in {ttl} seconds."},
+                headers={
+                    "Access-Control-Allow-Origin": "*",
+                    "Access-Control-Allow-Headers": "*",
+                    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+                },
             )
     except Exception:
         pass

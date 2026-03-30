@@ -109,23 +109,32 @@ export default function Home() {
       setResultTab("fallacies");
       setTimeout(() => resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 100);
     } catch (e: any) {
+      // Debug: log full error structure
+      console.error("API Error:", {
+        status: e?.response?.status,
+        data: e?.response?.data,
+        message: e?.message,
+        code: e?.code,
+      });
       const status = e?.response?.status;
-      const detail = e?.response?.data?.detail;
-      if (status === 408) {
+      const detail = e?.response?.data?.detail || e?.response?.data?.message || "";
+
+      if (status === 429 || detail.includes("Guest users") || detail.includes("limited to 3")) {
+        if (detail.includes("Guest users") || detail.includes("limited to 3")) {
+          setGuestLimited(true);
+        } else {
+          setError(detail || "Too many requests. Please wait a moment before trying again.");
+        }
+      } else if (status === 408) {
         setError("Analysis timed out. Try with shorter or simpler content.");
       } else if (status === 413) {
         setError("Content is too large. Please use text under 50,000 characters.");
       } else if (status === 400) {
         setError(detail || "Invalid input. Please check your content and try again.");
-      } else if (status === 429) {
-        if (detail && detail.includes("Guest users")) {
-          setGuestLimited(true);
-        } else {
-          setError(detail || "Too many requests. Please wait a moment before trying again.");
-        }
       } else if (status >= 500) {
         setError("The analysis service is temporarily unavailable. Please try again in a moment.");
       } else if (!e?.response) {
+        // Check if it might be a rate limit disguised as network error
         setError("Cannot reach the server. Make sure the backend is running.");
       } else {
         setError(detail || "Analysis failed. Please try again.");
