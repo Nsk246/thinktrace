@@ -76,6 +76,7 @@ export default function Home() {
   const [activeAgent, setActiveAgent] = useState(-1);
   const [analysisId, setAnalysisId] = useState<string | null>(null);
   const [shareCopied, setShareCopied] = useState(false);
+  const [guestLimited, setGuestLimited] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const resultsRef = useRef<HTMLDivElement>(null);
   const timerRef = useRef<NodeJS.Timeout[]>([]);
@@ -97,7 +98,7 @@ export default function Home() {
   };
 
   const handleAnalyze = async () => {
-    setLoading(true); setError(""); setResult(null);
+    setLoading(true); setError(""); setResult(null); setGuestLimited(false);
     startAgentAnimation();
     try {
       const data = tab === "pdf" && file ? await analyzeFile(file)
@@ -117,7 +118,11 @@ export default function Home() {
       } else if (status === 400) {
         setError(detail || "Invalid input. Please check your content and try again.");
       } else if (status === 429) {
-        setError("Too many requests. Please wait a moment before trying again.");
+        if (detail && detail.includes("Guest users")) {
+          setGuestLimited(true);
+        } else {
+          setError(detail || "Too many requests. Please wait a moment before trying again.");
+        }
       } else if (status >= 500) {
         setError("The analysis service is temporarily unavailable. Please try again in a moment.");
       } else if (!e?.response) {
@@ -323,6 +328,34 @@ export default function Home() {
 
         {error && (
           <div style={{ padding: "14px 18px", background: "rgba(239,68,68,0.08)", border: "1.5px solid rgba(239,68,68,0.3)", borderRadius: 12, color: "#ef4444", fontSize: 14, marginBottom: 14 }}>{error}</div>
+        )}
+
+        {guestLimited && (
+          <div style={{
+            padding: "18px 20px",
+            background: "rgba(99,102,241,0.06)",
+            border: "1.5px solid rgba(99,102,241,0.3)",
+            borderRadius: 14, marginBottom: 14,
+            display: "flex", alignItems: "center",
+            justifyContent: "space-between", flexWrap: "wrap", gap: 12,
+          }}>
+            <div>
+              <p style={{ fontSize: 14, fontWeight: 600, color: "var(--text)", marginBottom: 4 }}>
+                Daily guest limit reached
+              </p>
+              <p style={{ fontSize: 13, color: "var(--text3)", margin: 0 }}>
+                Guest users can run 3 analyses per day. Sign in for 100 analyses per hour.
+              </p>
+            </div>
+            <a href="/auth" style={{
+              padding: "9px 20px", borderRadius: 10,
+              background: "linear-gradient(135deg,#6366f1,#0ea5e9)",
+              color: "#fff", fontSize: 13, fontWeight: 600,
+              textDecoration: "none", whiteSpace: "nowrap", flexShrink: 0,
+            }}>
+              Sign in — it's free →
+            </a>
+          </div>
         )}
 
         {/* AGENT ANIMATION */}
