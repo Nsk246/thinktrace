@@ -88,26 +88,9 @@ app.add_middleware(
 )
 
 # ── Rate limiting — per IP using Redis ──
-@app.middleware("http")
-async def rate_limit(request: Request, call_next):
-    """
-    Rate limits the analyze endpoint to prevent abuse.
-    100 requests per hour per IP for analysis.
-    1000 requests per hour for everything else.
-    """
-    if request.method == "OPTIONS":
-        return await call_next(request)
-
-    path = request.url.path
-    if path not in ("/api/v1/analyze", "/api/v1/compare"):
-        return await call_next(request)
-
-    client_ip = request.headers.get("x-forwarded-for", request.client.host if request.client else "unknown")
-    client_ip = client_ip.split(",")[0].strip()
-
+def get_redis_client():
     try:
-        import redis as redis_lib
-        import ssl
+        import redis as redis_lib, ssl
         r = redis_lib.from_url(
             settings.redis_url,
             decode_responses=True,
@@ -115,18 +98,104 @@ async def rate_limit(request: Request, call_next):
             socket_connect_timeout=2,
             socket_timeout=2,
         )
-        key = f"rate:{client_ip}:analyze"
+        r.ping()
+        return r
+    except Exception:
+        return None
+
+
+def get_client_ip(request: Request) -> str:
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+def check_rate_limit(r, key: str, limit: int, window: int, detail: str):
+    """Returns a JSONResponse if rate limited, None if allowed."""
+    try:
         count = r.incr(key)
         if count == 1:
-            r.expire(key, 3600)  # 1 hour window
-        if count > 100:
+            r.expire(key, window)
+        if count > limit:
             ttl = r.ttl(key)
             return JSONResponse(
                 status_code=429,
-                content={"detail": f"Rate limit exceeded. You can run 100 analyses per hour. Try again in {ttl} seconds."}
+                content={"detail": f"{detail} Try again in {ttl} seconds."}
             )
     except Exception:
-        pass  # If Redis is down, allow the request
+        pass
+    return None
+
+
+@app.middleware("http")
+async def rate_limit(request: Request, call_next):
+    if request.method == "OPTIONS":
+        return await call_next(request)
+
+    path = request.url.path
+    client_ip = get_client_ip(request)
+    r = get_redis_client()
+
+    if r:
+        # ── Auth endpoints — prevent OTP spam and brute force ──
+        if path in ("/api/v1/auth/register", "/api/v1/auth/resend-otp"):
+            # 5 registration attempts per IP per hour
+            blocked = check_rate_limit(
+                r, f"rate:{client_ip}:register", 5, 3600,
+                "Too many registration attempts from this IP."
+            )
+            if blocked:
+                return blocked
+
+        if path == "/api/v1/auth/login":
+            # 20 login attempts per IP per hour
+            blocked = check_rate_limit(
+                r, f"rate:{client_ip}:login", 20, 3600,
+                "Too many login attempts from this IP."
+            )
+            if blocked:
+                return blocked
+
+        if path == "/api/v1/auth/verify-otp":
+            # 10 OTP attempts per IP per 10 minutes
+            blocked = check_rate_limit(
+                r, f"rate:{client_ip}:otp", 10, 600,
+                "Too many verification attempts from this IP."
+            )
+            if blocked:
+                return blocked
+
+        # ── Analysis endpoints ──
+        if path in ("/api/v1/analyze", "/api/v1/compare"):
+            # Check auth header to determine if logged in
+            auth_header = request.headers.get("authorization", "")
+            is_authenticated = auth_header.startswith("Bearer ")
+
+            if not is_authenticated:
+                # Unauthenticated: 3 analyses per IP per day (demo mode)
+                blocked = check_rate_limit(
+                    r, f"rate:{client_ip}:anon_analyze", 3, 86400,
+                    "Guest users are limited to 3 analyses per day. Sign in for full access."
+                )
+                if blocked:
+                    return blocked
+            else:
+                # Authenticated: 100 analyses per IP per hour
+                blocked = check_rate_limit(
+                    r, f"rate:{client_ip}:analyze", 100, 3600,
+                    "Rate limit exceeded. You can run 100 analyses per hour."
+                )
+                if blocked:
+                    return blocked
+
+        # ── Global safety net — 500 requests per IP per hour ──
+        blocked = check_rate_limit(
+            r, f"rate:{client_ip}:global", 500, 3600,
+            "Too many requests from this IP."
+        )
+        if blocked:
+            return blocked
 
     return await call_next(request)
 
