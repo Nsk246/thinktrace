@@ -8,23 +8,30 @@ _embedder = None
 
 
 def get_embedder():
-    """Load sentence-transformers model from local cache — no network calls."""
+    """
+    Load sentence-transformers if available.
+    Falls back to hash embeddings in production where torch is not installed.
+    """
     global _embedder
     if _embedder is not None:
         return _embedder
     try:
+        # Check if sentence_transformers is available
+        import importlib.util
+        if importlib.util.find_spec("sentence_transformers") is None:
+            logger.info("sentence_transformers not installed — using hash embeddings")
+            return None
+
         import os
         cache_dir = os.path.join(os.path.dirname(__file__), "..", "models")
         cache_dir = os.path.abspath(cache_dir)
 
-        # Block ALL network calls from transformers/HuggingFace
         os.environ["TRANSFORMERS_OFFLINE"] = "1"
         os.environ["HF_HUB_OFFLINE"] = "1"
         os.environ["HF_DATASETS_OFFLINE"] = "1"
         os.environ["HF_HUB_DISABLE_TELEMETRY"] = "1"
         os.environ["DISABLE_TELEMETRY"] = "1"
 
-        # Suppress verbose loading logs
         import logging
         logging.getLogger("sentence_transformers").setLevel(logging.WARNING)
         logging.getLogger("transformers").setLevel(logging.WARNING)
@@ -38,7 +45,7 @@ def get_embedder():
         logger.info(f"Sentence transformer loaded from local cache: {cache_dir}")
         return _embedder
     except Exception as e:
-        logger.warning(f"Sentence transformer unavailable: {e} — falling back to hash embeddings")
+        logger.warning(f"Sentence transformer unavailable: {e} — using hash embeddings")
         return None
 
 
