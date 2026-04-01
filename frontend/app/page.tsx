@@ -60,7 +60,7 @@ const techStack = [
   { category: "Fact Checking", items: ["Serper Search", "Wikipedia API", "ArXiv + PubMed"] },
   { category: "Backend", items: ["FastAPI", "JWT Auth", "Multi-tenant orgs"] },
   { category: "Frontend", items: ["Next.js 14", "TypeScript", "Tailwind CSS"] },
-  { category: "Infrastructure", items: ["Docker", "GitHub Actions CI", "Render deploy"] },
+  { category: "Infrastructure", items: ["Docker", "GitHub Actions CI", "Railway deploy"] },
 ];
 
 export default function Home() {
@@ -568,7 +568,7 @@ export default function Home() {
 
       {/* AGENT EXPLAINER */}
       <div style={{ maxWidth: 960, margin: "72px auto 0", padding: "0 20px" }}>
-        {sec("How it works", "Four agents. One verdict.", "Each agent is a specialist. They run in parallel and their findings are combined into a single structured report.")}
+        {sec("How it works", "Four agents. One verdict.", "Parser runs first to extract claims. Then Mapper, Detector and Verifier fire in parallel. Their findings are combined into a single structured report.")}
         <div style={grid4}>
           {agents.map((a, i) => (
             <div key={a.name} className="card" style={{ padding: "26px 22px" }}>
