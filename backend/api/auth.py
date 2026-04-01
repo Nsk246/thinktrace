@@ -235,11 +235,14 @@ class LoginRequest(BaseModel):
 
 
 def hash_password(password: str) -> str:
-    return pwd_context.hash(password[:72].encode("utf-8"))
+    # Truncate to 72 chars before encoding — bcrypt limit
+    truncated = password.encode("utf-8")[:72].decode("utf-8", errors="ignore")
+    return pwd_context.hash(truncated)
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return pwd_context.verify(plain[:72].encode("utf-8"), hashed)
+    truncated = plain.encode("utf-8")[:72].decode("utf-8", errors="ignore")
+    return pwd_context.verify(truncated, hashed)
 
 
 def create_token(user_id: str, org_id: str, role: str) -> str:
