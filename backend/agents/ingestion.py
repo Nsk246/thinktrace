@@ -241,24 +241,29 @@ class IngestionAgent:
                 logger.error(f"Could not extract YouTube video ID from: {url}")
                 return self._extract_url_html(url)
 
-            # Fetch transcript — try English first, fall back to any available
+            # New API: fetch_transcript is the main method in newer versions
             try:
-                transcript_list = YouTubeTranscriptApi.get_transcript(video_id, languages=["en"])
+                yt = YouTubeTranscriptApi()
+                fetched = yt.fetch(video_id)
+                transcript_list = fetched.snippets
             except Exception:
                 try:
-                    transcripts = YouTubeTranscriptApi.list_transcripts(video_id)
-                    transcript = transcripts.find_a_transcript(["en", "en-US", "en-GB"])
-                    transcript_list = transcript.fetch()
-                except Exception:
-                    # Last resort — auto-generated
-                    transcripts = YouTubeTranscriptApi.list_transcripts(video_id)
-                    transcript_list = list(transcripts)[0].fetch()
+                    # Fallback for older API versions
+                    transcript_list = YouTubeTranscriptApi.get_transcript(video_id, languages=["en", "en-US", "en-GB"])
+                except Exception as e2:
+                    logger.error(f"YouTube transcript fetch failed: {e2}")
+                    return self._extract_url_html(url)
 
             # Join transcript segments into clean text
-            text = " ".join(seg["text"] for seg in transcript_list)
-            # Clean up common transcript artifacts
-            text = re.sub(r"\[.*?\]", "", text)  # Remove [Music], [Applause] etc
+            text = " ".join(
+                seg.text if hasattr(seg, "text") else seg.get("text", "")
+                for seg in transcript_list
+            )
+            text = re.sub(r"\[.*?\]", "", text)
             text = re.sub(r"\s+", " ", text).strip()
+
+            if not text:
+                return self._extract_url_html(url)
 
             logger.info(f"YouTube transcript extracted: {len(text)} chars from video {video_id}")
             return text[:6000]
