@@ -154,11 +154,11 @@ class KnowledgeGraphService:
         for fc in analysis_result.fact_checks:
             tx.run("""
                 MATCH (c:Claim {id: $claim_id})
-                MERGE (c)-[:FACT_CHECKED {
-                    verdict: $verdict,
-                    confidence: $confidence,
-                    explanation: $explanation
-                }]->(c)
+                MERGE (fc:FactCheck {claim_id: $claim_id})
+                ON CREATE SET fc.verdict = $verdict,
+                              fc.confidence = $confidence,
+                              fc.explanation = $explanation
+                MERGE (c)-[:FACT_CHECKED]->(fc)
             """,
                 claim_id=fc.claim_id,
                 verdict=fc.verdict,
