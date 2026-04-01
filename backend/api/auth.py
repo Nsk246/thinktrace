@@ -371,21 +371,31 @@ async def resend_otp(email: str, db: Session = Depends(get_db)):
     if db.query(User).filter(User.email == email).first():
         raise HTTPException(status_code=400, detail="Account already exists")
 
-    import json
+    import json, time
     r = get_redis()
     key = f"otp:{email}"
-    raw = r.get(key) if r else None
-    if not raw:
-        raise HTTPException(
-            status_code=400,
-            detail="No pending registration found. Please start registration again."
-        )
-
-    data = json.loads(raw)
-    otp = str(random.randint(100000, 999999))
-    data["otp"] = otp
     if r:
+        raw = r.get(key)
+        if not raw:
+            raise HTTPException(
+                status_code=400,
+                detail="No pending registration found. Please start registration again."
+            )
+        data = json.loads(raw)
+        otp = str(random.randint(100000, 999999))
+        data["otp"] = otp
         r.setex(key, OTP_EXPIRE_SECONDS, json.dumps(data))
+    else:
+        entry = _otp_memory.get(email)
+        if not entry or entry["expires"] < time.time():
+            raise HTTPException(
+                status_code=400,
+                detail="No pending registration found. Please start registration again."
+            )
+        data = json.loads(entry["data"])
+        otp = str(random.randint(100000, 999999))
+        data["otp"] = otp
+        _otp_memory[email] = {"data": json.dumps(data), "expires": time.time() + OTP_EXPIRE_SECONDS}
 
     send_otp_email(email, otp, data.get("full_name", "there"))
     return {"message": "New verification code sent. Check your inbox and spam folder."}
