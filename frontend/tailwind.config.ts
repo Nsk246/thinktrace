@@ -13,7 +13,7 @@ const config: Config = {
         accent: 'var(--accent)',
         accent2: 'var(--accent2)',
         card: 'var(--card)',
-        border2: 'var(--border)',
+        border2: 'var(--border2)',
       },
     },
   },
