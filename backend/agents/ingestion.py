@@ -169,7 +169,7 @@ class IngestionAgent:
         context_hint = ""
         ct = content_meta.get("content_type", "direct_argument")
         if ct in ("encyclopedic", "reporting"):
-            context_hint = "\nNote: This is {ct} content. Most claims will be attributed to others, not the author."
+            context_hint = f"\nNote: This is {ct} content. Most claims will be attributed to others, not the author."
         elif ct == "mixed":
             context_hint = "\nNote: This is mixed content. Carefully distinguish the author's own claims from reported ones."
 
