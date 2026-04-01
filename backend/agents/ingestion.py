@@ -290,5 +290,13 @@ class IngestionAgent:
         """Route URL to appropriate extractor."""
         if self._is_youtube_url(url):
             logger.info(f"YouTube URL detected — extracting transcript")
-            return self._extract_youtube(url)
+            text = self._extract_youtube(url)
+            # If we got back YouTube page boilerplate, it means transcript failed
+            if not text or len(text) < 100 or "Google LLC" in text or "About Press Copyright" in text:
+                raise ValueError(
+                    "Could not extract YouTube transcript. "
+                    "YouTube blocks automated access from cloud servers. "
+                    "Please copy the video transcript manually and paste it in the Text tab instead."
+                )
+            return text
         return self._extract_url_html(url)
