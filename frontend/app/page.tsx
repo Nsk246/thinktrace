@@ -54,13 +54,13 @@ const useCases = [
 
 const techStack = [
   { category: "AI Orchestration", items: ["LangGraph", "LangChain", "LangSmith"] },
-  { category: "LLM and Agents", items: ["Claude API", "Multi-agent pipeline", "Tool-use agents"] },
-  { category: "Async and Queue", items: ["Celery workers", "Redis streams", "Upstash cloud"] },
-  { category: "Data and Memory", items: ["SQLAlchemy ORM", "Neo4j graph", "Pinecone vectors"] },
-  { category: "Fact Checking", items: ["Serper Search", "Wikipedia API", "ArXiv + PubMed"] },
-  { category: "Backend", items: ["FastAPI", "JWT Auth", "Multi-tenant orgs"] },
+  { category: "LLM and Agents", items: ["Claude API (Sonnet)", "4 parallel agents", "Epistemic scoring"] },
+  { category: "Async and Queue", items: ["Celery workers", "Redis broker", "Upstash Redis"] },
+  { category: "Data and Memory", items: ["PostgreSQL", "SQLAlchemy ORM", "Neo4j graph", "Pinecone vectors"] },
+  { category: "Fact Checking", items: ["Serper Search", "Wikipedia API", "ArXiv + PubMed + News"] },
+  { category: "Backend", items: ["FastAPI", "JWT + OTP Auth", "Multi-tenant orgs"] },
   { category: "Frontend", items: ["Next.js 14", "TypeScript", "Tailwind CSS"] },
-  { category: "Infrastructure", items: ["Docker", "GitHub Actions CI", "Railway deploy"] },
+  { category: "Infrastructure", items: ["Docker", "Railway cloud", "GitHub Actions CI"] },
 ];
 
 export default function Home() {
