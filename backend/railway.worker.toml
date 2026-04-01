@@ -1,0 +1,13 @@
+[build]
+builder = "nixpacks"
+buildCommand = "pip install -r requirements.txt"
+
+[deploy]
+startCommand = "celery -A services.celery_app.celery_app worker --loglevel=info --queues=analysis,watchdog --concurrency=2 --max-tasks-per-child=50"
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3
+
+[env]
+APP_ENV = "production"
+TRANSFORMERS_OFFLINE = "1"
+HF_HUB_OFFLINE = "1"
