@@ -73,7 +73,8 @@ export default function Home() {
   const [error, setError] = useState("");
   const [resultTab, setResultTab] = useState<ResultTab>("fallacies");
   const [windowWidth, setWindowWidth] = useState(1200);
-  const [activeAgent, setActiveAgent] = useState(-1);
+  const [activeAgents, setActiveAgents] = useState<number[]>([]);
+  const [doneAgents, setDoneAgents] = useState<number[]>([]);
   const [analysisId, setAnalysisId] = useState<string | null>(null);
   const [shareCopied, setShareCopied] = useState(false);
   const [guestLimited, setGuestLimited] = useState(false);
@@ -86,15 +87,22 @@ export default function Home() {
     : file !== null;
 
   const startAgentAnimation = () => {
-    setActiveAgent(0);
-    const delays = [0, 8000, 18000, 28000];
-    const timers = delays.map((delay, i) => setTimeout(() => setActiveAgent(i), delay));
-    timerRef.current = timers;
+    // Matches backend reality:
+    // Parser (0) runs first alone
+    // Then Mapper (1) + Detector (2) + Verifier (3) run in parallel
+    setActiveAgents([0]);
+    setDoneAgents([]);
+    const t1 = setTimeout(() => {
+      setDoneAgents([0]);
+      setActiveAgents([1, 2, 3]); // All 3 fire simultaneously
+    }, 7000);
+    timerRef.current = [t1];
   };
 
   const stopAgentAnimation = () => {
     timerRef.current.forEach(clearTimeout);
-    setActiveAgent(-1);
+    setActiveAgents([]);
+    setDoneAgents([]);
   };
 
   const handleAnalyze = async () => {
@@ -364,11 +372,11 @@ export default function Home() {
         {loading && (
           <div className="card" style={{ padding: "36px 28px", marginBottom: 14 }}>
             <p style={{ fontSize: 15, fontWeight: 600, color: "var(--text2)", marginBottom: 6 }}>Analyzing your argument</p>
-            <p style={{ fontSize: 13, color: "var(--text3)", marginBottom: 28 }}>Each agent runs in parallel. This takes 20 to 40 seconds.</p>
+            <p style={{ fontSize: 13, color: "var(--text3)", marginBottom: 28 }}>Parser runs first, then Mapper, Detector and Verifier fire in parallel. Takes 20–35 seconds.</p>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 12 }}>
               {agents.map((a, i) => {
-                const isActive = activeAgent === i;
-                const isDone = activeAgent > i;
+                const isActive = activeAgents.includes(i);
+                const isDone = doneAgents.includes(i) || (!isActive && doneAgents.length > 0 && i === 0);
                 return (
                   <div key={a.name} style={{
                     padding: "20px 16px",
@@ -402,7 +410,7 @@ export default function Home() {
                       marginBottom: 5, transition: "color 0.3s",
                     }}>{a.name}</div>
                     <div style={{ fontSize: 11, color: "var(--text4)", lineHeight: 1.4 }}>
-                      {isDone ? "Complete" : isActive ? a.role : "Waiting"}
+                      {isDone ? "Complete" : isActive ? a.role : doneAgents.includes(0) ? "Queued" : "Waiting"}
                     </div>
                   </div>
                 );
