@@ -156,7 +156,7 @@ def remove_member(
     if user.id == current_user.id:
         raise HTTPException(status_code=400, detail="Cannot remove yourself")
 
-    
+    db.delete(user)
     db.commit()
     return {"status": "deactivated", "user_id": user_id}
 
