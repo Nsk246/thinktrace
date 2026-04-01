@@ -14,7 +14,7 @@ const agents = [
   {
     name: "Parser",
     role: "Reads your content",
-    desc: "Reads your content and picks out every individual claim — the main point and all the supporting statements.",
+    desc: "Reads your content and picks out every individual claim including the main point and all the supporting statements.",
     color: "#6366f1",
     glow: "rgba(99,102,241,0.35)",
     rgb: "99,102,241",
@@ -22,7 +22,7 @@ const agents = [
   {
     name: "Mapper",
     role: "Builds the argument graph",
-    desc: "Draws a map of how the argument is built — which statements back each other up and where the logic breaks down.",
+    desc: "Draws a map of how the argument is built, which statements back each other up and where the logic breaks down.",
     color: "#0ea5e9",
     glow: "rgba(14,165,233,0.35)",
     rgb: "14,165,233",
@@ -30,7 +30,7 @@ const agents = [
   {
     name: "Detector",
     role: "Hunts logical fallacies",
-    desc: "Spots tricks and weak reasoning — like attacking the person instead of the point, or jumping to conclusions without evidence. Each one is explained simply.",
+    desc: "Spots tricks and weak reasoning like attacking the person instead of the point, or jumping to conclusions without evidence. Each one is explained simply.",
     color: "#f59e0b",
     glow: "rgba(245,158,11,0.35)",
     rgb: "245,158,11",
@@ -38,7 +38,7 @@ const agents = [
   {
     name: "Verifier",
     role: "Fact-checks live",
-    desc: "Looks up every factual claim against real sources — Wikipedia, Google, research papers, and news. Tells you what checks out and what doesn't.",
+    desc: "Looks up every factual claim against real sources like Wikipedia, Google, research papers, and news. Tells you what checks out and what doesn't.",
     color: "#22c55e",
     glow: "rgba(34,197,94,0.35)",
     rgb: "34,197,94",
