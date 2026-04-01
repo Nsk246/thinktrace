@@ -9,7 +9,7 @@ healthcheckTimeout = 60
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 3
 
-[env]
+[environment]
 APP_ENV = "production"
 TRANSFORMERS_OFFLINE = "1"
 HF_HUB_OFFLINE = "1"
@@ -18,3 +18,4 @@ WEB_CONCURRENCY = "2"
 LANGCHAIN_TRACING_V2 = "true"
 LANGCHAIN_PROJECT = "thinktrace"
 PINECONE_INDEX_NAME = "thinktrace"
+PYTHON_VERSION = "3.12"
