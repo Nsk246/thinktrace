@@ -18,7 +18,7 @@ const agents = [
     name: "Parser",
     color: "#6366f1",
     rgb: "99,102,241",
-    what: "Reads your content and extracts every distinct claim — premises, conclusions, and supporting sub-claims. Tracks attribution metadata to distinguish the author's own assertions from reported views.",
+    what: "Reads your content and extracts every distinct claim like premises, conclusions, and supporting sub-claims. Tracks attribution metadata to distinguish the author's own assertions from reported views.",
     how: "Sends a structured extraction prompt to Claude Sonnet. Returns typed claims with confidence scores and attribution flags.",
   },
   {
@@ -32,7 +32,7 @@ const agents = [
     name: "Detector",
     color: "#f59e0b",
     rgb: "245,158,11",
-    what: "Identifies named logical fallacies with severity ratings. Only fires on the author's own claims — not on views attributed to others. Each fallacy is explained in plain language.",
+    what: "Identifies named logical fallacies with severity ratings. Only fires on the author's own claims, not on views attributed to others. Each fallacy is explained in plain language.",
     how: "Context-aware prompt includes content type metadata. Encyclopedic content is handled differently from direct arguments.",
   },
   {
@@ -40,7 +40,7 @@ const agents = [
     color: "#22c55e",
     rgb: "34,197,94",
     what: "Fact-checks every verifiable claim against 5 live sources simultaneously: Google Search, Wikipedia, ArXiv, PubMed, and NewsAPI. Each claim gets a verdict and source attribution.",
-    how: "Smart routing — medical claims hit PubMed, scientific claims hit ArXiv, current events hit NewsAPI. All sources run in parallel with 8-second per-source timeouts.",
+    how: "Smart routing. Medical claims hit PubMed, scientific claims hit ArXiv, current events hit NewsAPI. All sources run in parallel with 8-second per-source timeouts.",
   },
 ];
 
@@ -67,7 +67,7 @@ export default function AboutPage() {
         <section style={{ marginBottom: 56 }}>
           <h2 style={{ fontSize: 20, fontWeight: 700, color: "var(--text)", letterSpacing: "-0.5px", marginBottom: 6 }}>Architecture</h2>
           <p style={{ fontSize: 14, color: "var(--text3)", marginBottom: 20, lineHeight: 1.7 }}>
-            Parser runs first and extracts all claims. Then Mapper, Detector, and Verifier fire simultaneously via ThreadPoolExecutor — reducing analysis time from ~90 seconds sequential to ~20 seconds parallel. The Epistemic Scorer synthesises all findings last.
+            Parser runs first and extracts all claims. Then Mapper, Detector, and Verifier fire simultaneously via ThreadPoolExecutor, reducing analysis time from ~90 seconds sequential to ~20 seconds parallel. The Epistemic Scorer synthesises all findings last.
           </p>
           <div className="card" style={{ padding: "24px", fontFamily: "monospace", fontSize: 13, color: "var(--text2)", lineHeight: 2, background: "var(--bg3)" }}>
             <div style={{ color: "var(--text4)", marginBottom: 4 }}># Execution flow</div>
@@ -106,7 +106,7 @@ export default function AboutPage() {
         <section style={{ marginBottom: 56 }}>
           <h2 style={{ fontSize: 20, fontWeight: 700, color: "var(--text)", letterSpacing: "-0.5px", marginBottom: 6 }}>Triple Store Data Layer</h2>
           <p style={{ fontSize: 14, color: "var(--text3)", marginBottom: 20, lineHeight: 1.7 }}>
-            Every analysis is saved to three stores simultaneously — each optimised for a different access pattern.
+            Every analysis is saved to three stores simultaneously, each optimised for a different access pattern.
           </p>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 12 }}>
             {[
