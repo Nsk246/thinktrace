@@ -109,13 +109,6 @@ export default function Home() {
       setResultTab("fallacies");
       setTimeout(() => resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 100);
     } catch (e: any) {
-      // Debug: log full error structure
-      console.error("API Error:", {
-        status: e?.response?.status,
-        data: e?.response?.data,
-        message: e?.message,
-        code: e?.code,
-      });
       const status = e?.response?.status;
       const detail = e?.response?.data?.detail || e?.response?.data?.message || "";
 

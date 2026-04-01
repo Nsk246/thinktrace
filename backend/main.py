@@ -214,15 +214,22 @@ async def rate_limit(request: Request, call_next):
     return await call_next(request)
 
 
-# ── Request size limit — reject payloads over 1MB ──
+# ── Request size limit ──
 @app.middleware("http")
 async def limit_request_size(request: Request, call_next):
-    max_size = 1 * 1024 * 1024  # 1MB
+    # PDFs up to 10MB, everything else 1MB
+    is_pdf = request.url.path == "/api/v1/ingest/pdf"
+    max_size = 10 * 1024 * 1024 if is_pdf else 1 * 1024 * 1024
     content_length = request.headers.get("content-length")
     if content_length and int(content_length) > max_size:
+        limit_label = "10MB for PDFs" if is_pdf else "1MB"
         return JSONResponse(
             status_code=413,
-            content={"detail": "Request too large. Maximum payload size is 1MB."}
+            content={"detail": f"File too large. Maximum size is {limit_label}."},
+            headers={
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Headers": "*",
+            },
         )
     return await call_next(request)
 
@@ -244,7 +251,12 @@ async def global_exception_handler(request: Request, exc: Exception):
     logger.error(f"Unhandled error on {request.url.path}: {exc}", exc_info=True)
     return JSONResponse(
         status_code=500,
-        content={"detail": "An unexpected error occurred. Please try again."}
+        content={"detail": "An unexpected error occurred. Please try again."},
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Headers": "*",
+            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+        },
     )
 
 app.include_router(analysis_router)
