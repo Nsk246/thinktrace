@@ -89,7 +89,9 @@ def get_index():
 
 
 def upsert_analysis(analysis_id: str, org_id: str, user_id: str = "anonymous",
-                    text: str = "", metadata: dict = {}):
+                    text: str = "", metadata: dict = None):
+    if metadata is None:
+        metadata = {}
     index = get_index()
     if not index:
         return False
