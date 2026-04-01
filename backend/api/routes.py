@@ -4,10 +4,13 @@ from agents.ingestion import IngestionAgent
 from core.models import AnalysisRequest, ContentType
 from core.graph import run_full_analysis
 from core.database import SessionLocal, AnalysisRecord
+from core.config import get_settings
 from celery.result import AsyncResult
 from services.celery_app import celery_app
 from datetime import datetime
 import logging
+
+settings = get_settings()
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1", tags=["analysis"])
