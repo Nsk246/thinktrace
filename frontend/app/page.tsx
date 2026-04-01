@@ -625,11 +625,11 @@ export default function Home() {
           </div>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 40, flexWrap: "wrap", marginBottom: 36 }}>
             {[
-              { label: "Agents", value: "6" },
-              { label: "API endpoints", value: "18+" },
+              { label: "Agents", value: "4" },
+              { label: "API endpoints", value: "33" },
               { label: "Eval pass rate", value: "100%" },
               { label: "Fact sources", value: "5" },
-              { label: "CI/CD", value: "GitHub Actions" },
+              { label: "CI/CD", value: "Railway + GitHub" },
             ].map(s => (
               <div key={s.label} style={{ textAlign: "center" }}>
                 <div style={{ fontSize: 22, fontWeight: 800, color: "#6366f1", letterSpacing: "-0.5px" }}>{s.value}</div>
