@@ -87,6 +87,7 @@ _allowed_dev = ["*"] if not _codespace else [
 allowed_origins = _allowed_dev if settings.app_env == "development" else [
     "https://thinktrace-frontend-production.up.railway.app",
     "https://thinktrace-frontend.up.railway.app",
+    "https://thinktrace.nandhusk.dev",
 ]
 app.add_middleware(
     CORSMiddleware,
