@@ -211,7 +211,7 @@ export default function Home() {
           <span className="gradient-text">know if it holds up.</span>
         </h1>
         <p style={{ fontSize: 18, color: "var(--text2)", maxWidth: 560, margin: "0 auto 14px", lineHeight: 1.75 }}>
-          Paste any article, claim, or argument. ThinkTrace checks the facts, spots the flaws, and tells you exactly how strong it is — in plain English.
+          Paste any article, claim, or argument. ThinkTrace checks the facts, spots the flaws, and tells you exactly how strong and true it is. In plain English.
         </p>
 
       </div>
@@ -224,7 +224,7 @@ export default function Home() {
           overflow: "hidden", border: "1px solid var(--border)",
         }}>
           {[
-            { step: "01", title: "Paste anything", desc: "Text, a PDF, or a link to an article. No formatting needed — just paste and go." },
+            { step: "01", title: "Paste anything", desc: "Text, a PDF, or a link to an article. No formatting needed. Just paste and go." },
             { step: "02", title: "We check it", desc: "ThinkTrace reads every claim, looks them up against real sources, and checks the logic." },
             { step: "03", title: "See what's wrong", desc: "You get a score, a list of factual errors, and plain-English explanations of any logical flaws." },
             { step: "04", title: "Share or act", desc: "Share the report with a link, or use the findings to push back with confidence." },
