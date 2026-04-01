@@ -14,7 +14,7 @@ const agents = [
   {
     name: "Parser",
     role: "Reads your content",
-    desc: "Extracts every distinct claim from the text. Premises, conclusions, and sub-claims are all identified and structured so the other agents have something concrete to work with.",
+    desc: "Reads your content and picks out every individual claim — the main point and all the supporting statements.",
     color: "#6366f1",
     glow: "rgba(99,102,241,0.35)",
     rgb: "99,102,241",
@@ -22,7 +22,7 @@ const agents = [
   {
     name: "Mapper",
     role: "Builds the argument graph",
-    desc: "Maps the logical structure of the argument. It shows which claims support which, which ones contradict each other, and how the reasoning chain connects evidence to the final conclusion.",
+    desc: "Draws a map of how the argument is built — which statements back each other up and where the logic breaks down.",
     color: "#0ea5e9",
     glow: "rgba(14,165,233,0.35)",
     rgb: "14,165,233",
@@ -30,7 +30,7 @@ const agents = [
   {
     name: "Detector",
     role: "Hunts logical fallacies",
-    desc: "Identifies named logical fallacies such as Ad Hominem, Straw Man, False Cause, and Hasty Generalization. Each one is explained in plain language so you can see exactly how it weakens the argument.",
+    desc: "Spots tricks and weak reasoning — like attacking the person instead of the point, or jumping to conclusions without evidence. Each one is explained simply.",
     color: "#f59e0b",
     glow: "rgba(245,158,11,0.35)",
     rgb: "245,158,11",
@@ -38,7 +38,7 @@ const agents = [
   {
     name: "Verifier",
     role: "Fact-checks live",
-    desc: "Searches the web in real time to verify every factual claim. Each one gets a verdict of Supported, Contradicted, Contested, or Unverifiable along with the sources used to reach that conclusion.",
+    desc: "Looks up every factual claim against real sources — Wikipedia, Google, research papers, and news. Tells you what checks out and what doesn't.",
     color: "#22c55e",
     glow: "rgba(34,197,94,0.35)",
     rgb: "34,197,94",
@@ -46,10 +46,10 @@ const agents = [
 ];
 
 const useCases = [
-  { Icon: IconNewspaper, title: "News and media", desc: "Spot misinformation and weak reasoning in articles before sharing them." },
-  { Icon: IconGraduationCap, title: "Academic research", desc: "Audit papers and essays for logical consistency and evidential gaps." },
-  { Icon: IconScale, title: "Legal and policy", desc: "Stress-test arguments in briefs, proposals, and policy documents." },
-  { Icon: IconBriefcase, title: "Business decisions", desc: "Evaluate pitches, reports, and proposals before committing resources." },
+  { Icon: IconNewspaper, title: "News and media", desc: "Check an article before you share it. Know if the facts hold up." },
+  { Icon: IconGraduationCap, title: "Academic research", desc: "Check your essay or a research paper for gaps in reasoning and unsupported claims." },
+  { Icon: IconScale, title: "Legal and policy", desc: "Test the strength of a proposal or policy argument before committing to it." },
+  { Icon: IconBriefcase, title: "Business decisions", desc: "Check a pitch or report for weak claims before making a decision based on it." },
 ];
 
 const techStack = [
@@ -207,11 +207,11 @@ export default function Home() {
           4 AI agents · Real-time analysis
         </div>
         <h1 className="hero-title" style={{ marginBottom: 20, color: "var(--text)" }}>
-          Is this argument<br />
-          <span className="gradient-text">actually sound?</span>
+          Before you share it,<br />
+          <span className="gradient-text">know if it holds up.</span>
         </h1>
         <p style={{ fontSize: 18, color: "var(--text2)", maxWidth: 560, margin: "0 auto 14px", lineHeight: 1.75 }}>
-          ThinkTrace reads any argument and tells you exactly what is logically flawed, factually wrong, and evidentially weak. In seconds.
+          Paste any article, claim, or argument. ThinkTrace checks the facts, spots the flaws, and tells you exactly how strong it is — in plain English.
         </p>
 
       </div>
@@ -224,10 +224,10 @@ export default function Home() {
           overflow: "hidden", border: "1px solid var(--border)",
         }}>
           {[
-            { step: "01", title: "Submit content", desc: "Paste text, upload a PDF, or drop a URL. ThinkTrace handles everything from there." },
-            { step: "02", title: "Agents analyze", desc: "Four specialist agents run in parallel mapping logic, detecting fallacies, and verifying facts." },
-            { step: "03", title: "Get a verdict", desc: "Every claim is scored, every fallacy named, and every fact checked against live web sources." },
-            { step: "04", title: "Act on it", desc: "Use the structured report to improve, challenge, or validate the argument with confidence." },
+            { step: "01", title: "Paste anything", desc: "Text, a PDF, or a link to an article. No formatting needed — just paste and go." },
+            { step: "02", title: "We check it", desc: "ThinkTrace reads every claim, looks them up against real sources, and checks the logic." },
+            { step: "03", title: "See what's wrong", desc: "You get a score, a list of factual errors, and plain-English explanations of any logical flaws." },
+            { step: "04", title: "Share or act", desc: "Share the report with a link, or use the findings to push back with confidence." },
           ].map((s, i) => (
             <div key={i} style={{ background: "var(--bg2)", padding: "28px 24px" }}>
               <div style={{ fontSize: 12, fontWeight: 700, color: "#6366f1", letterSpacing: "0.1em", marginBottom: 12 }}>{s.step}</div>
@@ -382,8 +382,8 @@ export default function Home() {
         {/* AGENT ANIMATION */}
         {loading && (
           <div className="card" style={{ padding: "36px 28px", marginBottom: 14 }}>
-            <p style={{ fontSize: 15, fontWeight: 600, color: "var(--text2)", marginBottom: 6 }}>Analyzing your argument</p>
-            <p style={{ fontSize: 13, color: "var(--text3)", marginBottom: 28 }}>Parser runs first, then Mapper, Detector and Verifier fire in parallel. Takes 20–35 seconds.</p>
+            <p style={{ fontSize: 15, fontWeight: 600, color: "var(--text2)", marginBottom: 6 }}>Checking your content</p>
+            <p style={{ fontSize: 13, color: "var(--text3)", marginBottom: 28 }}>This takes 20–35 seconds. We're checking the facts, the logic, and the reasoning all at once.</p>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 12 }}>
               {agents.map((a, i) => {
                 const isActive = activeAgents.includes(i);
@@ -579,7 +579,7 @@ export default function Home() {
 
       {/* AGENT EXPLAINER */}
       <div style={{ maxWidth: 960, margin: "72px auto 0", padding: "0 20px" }}>
-        {sec("How it works", "Four agents. One verdict.", "Parser runs first to extract claims. Then Mapper, Detector and Verifier fire in parallel. Their findings are combined into a single structured report.")}
+        {sec("How it works", "What ThinkTrace checks", "Parser runs first to extract claims. Then Mapper, Detector and Verifier fire in parallel. Their findings are combined into a single structured report.")}
         <div style={grid4}>
           {agents.map((a, i) => (
             <div key={a.name} className="card" style={{ padding: "26px 22px" }}>
@@ -601,7 +601,7 @@ export default function Home() {
 
       {/* USE CASES */}
       <div style={{ maxWidth: 960, margin: "72px auto 0", padding: "0 20px" }}>
-        {sec("Who uses it", "Built for people who care about getting it right")}
+        {sec("Who uses it", "Anyone can use it")}
         <div style={grid4}>
           {useCases.map(u => (
             <div key={u.title} className="card" style={{ padding: "24px 22px" }}>
@@ -618,7 +618,7 @@ export default function Home() {
       {/* TECH STACK */}
       <div style={{ borderTop: "1.5px solid var(--border)", marginTop: 80, padding: "56px 20px 64px", background: "var(--bg2)" }}>
         <div style={{ maxWidth: 960, margin: "0 auto" }}>
-          {sec("Enterprise stack", "Built with production-grade technology", "Every component chosen for real-world scalability, observability, and enterprise deployment.")}
+          {sec("Built on", "The technology behind ThinkTrace", "Want to know how it works under the hood?")}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 12, marginBottom: 40 }}>
             {techStack.map(t => (
               <div key={t.category} style={{ background: "var(--card)", border: "1.5px solid var(--border)", borderRadius: 14, padding: "18px 20px" }}>
