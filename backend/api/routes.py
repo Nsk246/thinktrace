@@ -26,6 +26,12 @@ def save_analysis_record(result, request: AnalysisRequest):
     import json as _json
     db = SessionLocal()
     try:
+        # Ensure default org exists for guest analyses
+        if request.org_id == 'default':
+            from core.database import Organization
+            if not db.query(Organization).filter(Organization.id == 'default').first():
+                db.add(Organization(id='default', name='Guest', slug='guest-default'))
+                db.commit()
         full_result_json = _json.dumps({
             "analysis_id": result.id,
             "claim_count": len(result.claim_tree.claims),
