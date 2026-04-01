@@ -1,8 +1,12 @@
 [phases.setup]
-nixPkgs = ["python312"]
+nixPkgs = ["python312", "python312Packages.pip", "python312Packages.virtualenv"]
 
 [phases.install]
-cmds = ["pip install -r requirements.txt --break-system-packages"]
+cmds = [
+    "python3.12 -m venv /opt/venv",
+    "/opt/venv/bin/pip install --upgrade pip",
+    "/opt/venv/bin/pip install -r requirements.txt"
+]
 
 [start]
-cmd = "gunicorn main:app -c gunicorn.conf.py"
+cmd = "/opt/venv/bin/gunicorn main:app -c gunicorn.conf.py"
