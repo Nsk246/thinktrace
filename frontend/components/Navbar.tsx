@@ -16,6 +16,11 @@ const links = [
   { href: "/team", label: "Team" },
 ];
 
+// Public links shown to everyone (not just logged in)
+const publicLinks = [
+  { href: "/about", label: "About" },
+];
+
 const SunIcon = () => (
   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>

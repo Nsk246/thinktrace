@@ -615,43 +615,42 @@ export default function Home() {
         </div>
       </div>
 
-      {/* TECH STACK */}
-      <div style={{ borderTop: "1.5px solid var(--border)", marginTop: 80, padding: "56px 20px 64px", background: "var(--bg2)" }}>
-        <div style={{ maxWidth: 960, margin: "0 auto" }}>
-          {sec("Built on", "The technology behind ThinkTrace", "Want to know how it works under the hood?")}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 12, marginBottom: 40 }}>
-            {techStack.map(t => (
-              <div key={t.category} style={{ background: "var(--card)", border: "1.5px solid var(--border)", borderRadius: 14, padding: "18px 20px" }}>
-                <p style={{ fontSize: 11, fontWeight: 600, color: "var(--text4)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 12 }}>{t.category}</p>
-                <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-                  {t.items.map(item => (
-                    <div key={item} style={{ display: "flex", alignItems: "center", gap: 9 }}>
-                      <div style={{ width: 4, height: 4, borderRadius: "50%", background: "#6366f1", flexShrink: 0, marginTop: 1 }} />
-                      <span style={{ fontSize: 13, fontWeight: 500, color: "var(--text2)" }}>{item}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 40, flexWrap: "wrap", marginBottom: 36 }}>
+      {/* FOOTER */}
+      <div style={{ borderTop: "1px solid var(--border)", marginTop: 80, padding: "48px 20px 56px", background: "var(--bg2)" }}>
+        <div style={{ maxWidth: 960, margin: "0 auto", textAlign: "center" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 48, flexWrap: "wrap", marginBottom: 36 }}>
             {[
-              { label: "Agents", value: "4" },
-              { label: "API endpoints", value: "33" },
-              { label: "Eval pass rate", value: "100%" },
+              { label: "AI agents", value: "4" },
               { label: "Fact sources", value: "5" },
-              { label: "CI/CD", value: "Railway + GitHub" },
+              { label: "Eval pass rate", value: "100%" },
+              { label: "Analysis time", value: "~20s" },
             ].map(s => (
               <div key={s.label} style={{ textAlign: "center" }}>
-                <div style={{ fontSize: 22, fontWeight: 800, color: "#6366f1", letterSpacing: "-0.5px" }}>{s.value}</div>
-                <div style={{ fontSize: 12, color: "var(--text4)" }}>{s.label}</div>
+                <div style={{ fontSize: 28, fontWeight: 800, color: "var(--text)", letterSpacing: "-1px", lineHeight: 1 }}>{s.value}</div>
+                <div style={{ fontSize: 12, color: "var(--text4)", marginTop: 4 }}>{s.label}</div>
               </div>
             ))}
           </div>
-          <p style={{ textAlign: "center", fontSize: 13, color: "var(--text4)" }}>
-            Built by <span style={{ color: "var(--text3)", fontWeight: 500 }}>@Nsk246</span> {" · "}
+          <div style={{ marginBottom: 32 }}>
+            <a href="/about" style={{
+              display: "inline-flex", alignItems: "center", gap: 8,
+              fontSize: 14, color: "#818cf8", textDecoration: "none", fontWeight: 500,
+              padding: "11px 24px", borderRadius: 10,
+              border: "1px solid rgba(129,140,248,0.25)",
+              background: "rgba(99,102,241,0.05)",
+            }}>
+              How it works technically →
+            </a>
+          </div>
+          <p style={{ fontSize: 13, color: "var(--text4)" }}>
+            Built by{" "}
+            <a href="https://nandhusk.dev" target="_blank" rel="noopener noreferrer"
+               style={{ color: "var(--text3)", fontWeight: 500, textDecoration: "none" }}>@Nsk246</a>
+            {" · "}
             <a href="https://github.com/Nsk246/thinktrace" target="_blank" rel="noopener noreferrer"
-               style={{ color: "#818cf8", textDecoration: "none", fontWeight: 500 }}>View on GitHub</a>
+               style={{ color: "#818cf8", textDecoration: "none", fontWeight: 500 }}>GitHub</a>
+            {" · "}
+            <a href="/about" style={{ color: "var(--text4)", textDecoration: "none" }}>About</a>
           </p>
         </div>
       </div>
