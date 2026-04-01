@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from core.database import get_db, User, Organization
 from core.config import get_settings
 from pydantic import BaseModel, field_validator
-from passlib.context import CryptContext
+
 from jose import JWTError, jwt
 from datetime import datetime, timedelta
 import uuid
@@ -15,7 +15,8 @@ import logging
 logger = logging.getLogger(__name__)
 settings = get_settings()
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+import bcrypt as _bcrypt
+# Use bcrypt directly — passlib incompatible with bcrypt>=4.1
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 
 MAX_ATTEMPTS = 5
@@ -235,14 +236,15 @@ class LoginRequest(BaseModel):
 
 
 def hash_password(password: str) -> str:
-    # Truncate to 72 chars before encoding — bcrypt limit
-    truncated = password.encode("utf-8")[:72].decode("utf-8", errors="ignore")
-    return pwd_context.hash(truncated)
+    pwd_bytes = password.encode("utf-8")[:72]
+    return _bcrypt.hashpw(pwd_bytes, _bcrypt.gensalt()).decode("utf-8")
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    truncated = plain.encode("utf-8")[:72].decode("utf-8", errors="ignore")
-    return pwd_context.verify(truncated, hashed)
+    try:
+        return _bcrypt.checkpw(plain.encode("utf-8")[:72], hashed.encode("utf-8"))
+    except Exception:
+        return False
 
 
 def create_token(user_id: str, org_id: str, role: str) -> str:
