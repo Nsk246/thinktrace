@@ -196,7 +196,7 @@ export default function Home() {
       <Navbar />
 
       {/* HERO */}
-      <div style={{ textAlign: "center", padding: "72px 20px 28px", maxWidth: 800, margin: "0 auto" }}>
+      <div style={{ textAlign: "center", padding: "60px 20px 20px", maxWidth: 800, margin: "0 auto" }}>
         <div style={{
           display: "inline-flex", alignItems: "center", gap: 7,
           background: "var(--bg3)", border: "1.5px solid var(--border)",
@@ -217,7 +217,7 @@ export default function Home() {
       </div>
 
       {/* HOW IT WORKS STRIP */}
-      <div style={{ maxWidth: 960, margin: "44px auto 0", padding: "0 20px" }}>
+      <div style={{ maxWidth: 960, margin: "24px auto 0", padding: "0 20px" }}>
         <div style={{
           display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))",
           gap: 0, background: "var(--border)", borderRadius: 18,
@@ -239,7 +239,7 @@ export default function Home() {
       </div>
 
       {/* INPUT CARD */}
-      <div style={{ maxWidth: 800, margin: "36px auto 0", padding: "0 20px 20px" }}>
+      <div style={{ maxWidth: 800, margin: "24px auto 0", padding: "0 20px 20px" }}>
         <div className="card" style={{ marginBottom: 16, overflow: "hidden" }}>
           <div style={{ display: "flex", borderBottom: "1.5px solid var(--border)" }}>
             {(["text", "pdf", "url"] as Tab[]).map(t => (
@@ -316,19 +316,30 @@ export default function Home() {
             )}
 
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 16, flexWrap: "wrap", gap: 10 }}>
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+                <span style={{ fontSize: 11, color: "var(--text4)", marginRight: 2 }}>Agents:</span>
                 {agents.map(a => (
                   <span key={a.name} style={{
-                    fontSize: 12, color: "var(--text3)",
-                    background: "var(--bg3)", border: "1.5px solid var(--border)",
-                    padding: "4px 12px", borderRadius: 100,
+                    fontSize: 11, fontWeight: 500, color: "var(--text3)",
+                    background: "var(--bg3)", border: "1px solid var(--border)",
+                    padding: "3px 10px", borderRadius: 100,
+                    letterSpacing: "0.02em",
                   }}>{a.name}</span>
                 ))}
               </div>
               <button
                 onClick={handleAnalyze}
                 disabled={loading || !canAnalyze}
-                className="btn-primary"
+                style={{
+                  padding: "12px 28px", borderRadius: 10, border: "none",
+                  background: canAnalyze && !loading ? "linear-gradient(135deg,#6366f1,#0ea5e9)" : "var(--bg3)",
+                  color: canAnalyze && !loading ? "#fff" : "var(--text4)",
+                  fontSize: 14, fontWeight: 600,
+                  cursor: loading || !canAnalyze ? "not-allowed" : "pointer",
+                  transition: "all 0.2s", whiteSpace: "nowrap",
+                  boxShadow: canAnalyze && !loading ? "0 4px 14px rgba(99,102,241,0.3)" : "none",
+                  fontFamily: "inherit",
+                }}
               >
                 {loading ? "Analyzing..." : "Analyze →"}
               </button>
