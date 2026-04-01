@@ -256,6 +256,9 @@ async def analyze(request: AnalysisRequest):
         }
     except HTTPException:
         raise
+    except ValueError as e:
+        logger.warning(f'Analysis input error: {e}')
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"Analysis failed: {e}", exc_info=True)
         raise HTTPException(
