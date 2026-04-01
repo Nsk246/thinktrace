@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional, List
 from enum import Enum
 import uuid
@@ -13,6 +13,8 @@ class ContentType(str, Enum):
 
 
 class Claim(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     text: str
     claim_type: str  # premise | conclusion | sub_claim
@@ -21,12 +23,16 @@ class Claim(BaseModel):
 
 
 class ClaimTree(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
     claims: List[Claim]
     raw_text: str
     source_type: ContentType
 
 
 class Fallacy(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
     name: str
     description: str
     affected_claim_id: str
@@ -49,12 +55,16 @@ class ArgumentNode(BaseModel):
 
 
 class ArgumentEdge(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
     source_id: str
     target_id: str
     relation: str   # supports | contradicts | qualifies
 
 
 class ArgumentGraph(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
     nodes: List[ArgumentNode]
     edges: List[ArgumentEdge]
 
