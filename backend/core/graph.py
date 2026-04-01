@@ -1,5 +1,6 @@
 from langgraph.graph import StateGraph, END
 from typing import TypedDict, Optional
+import logging
 from core.models import (
     ClaimTree, ArgumentGraph, Fallacy,
     FactCheckResult, EpistemicScore, AnalysisResult
