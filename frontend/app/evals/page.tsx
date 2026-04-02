@@ -39,14 +39,32 @@ export default function EvalsPage() {
 
   const runSuite = async () => {
     setRunning(true);
-    setMsg("Eval suite running. This takes around 2 minutes as each test case runs a full analysis...");
+    setMsg("Eval suite running. Checking every 10 seconds...");
     try {
       await api.post("/api/v1/eval/run");
-      setTimeout(async () => {
-        const d = await getEvalResults().catch(() => null);
-        setData(d); setRunning(false);
-        setMsg("Eval suite complete. Results updated.");
-      }, 120000);
+      // Poll every 10 seconds until results arrive (max 3 minutes)
+      let attempts = 0;
+      const poll = setInterval(async () => {
+        attempts++;
+        try {
+          const d = await getEvalResults();
+          if (d && d.status === "complete") {
+            clearInterval(poll);
+            setData(d);
+            setRunning(false);
+            setMsg("Eval suite complete. Results updated.");
+          } else if (attempts >= 18) {
+            // 18 × 10s = 3 minutes max
+            clearInterval(poll);
+            setRunning(false);
+            setMsg("Eval suite timed out. Try refreshing.");
+          } else {
+            setMsg(`Eval suite running... (${attempts * 10}s elapsed)`);
+          }
+        } catch {
+          // keep polling
+        }
+      }, 10000);
     } catch (e: any) {
       setMsg(e?.response?.data?.detail || "Failed to run eval suite.");
       setRunning(false);
