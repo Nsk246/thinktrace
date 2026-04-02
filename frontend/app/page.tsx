@@ -5,6 +5,7 @@ import { ScoreBadge } from "@/components/ScoreBadge";
 import { FallacyCard } from "@/components/FallacyCard";
 import { FactCheckCard } from "@/components/FactCheckCard";
 import { Navbar } from "@/components/Navbar";
+import { useAuthStore } from "@/lib/store";
 import { IconSearch, IconFileText, IconGlobe, IconEye, IconFlask, IconUsers, IconNewspaper, IconGraduationCap, IconScale, IconBriefcase } from "@/components/Icons";
 
 type Tab = "text" | "pdf" | "url";
@@ -77,6 +78,7 @@ export default function Home() {
   const [doneAgents, setDoneAgents] = useState<number[]>([]);
   const [analysisId, setAnalysisId] = useState<string | null>(null);
   const [shareCopied, setShareCopied] = useState(false);
+  const { token } = useAuthStore();
   const [guestLimited, setGuestLimited] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const resultsRef = useRef<HTMLDivElement>(null);
@@ -346,6 +348,35 @@ export default function Home() {
             </div>
           </div>
         </div>
+
+        {/* Sign in prompt — show only when not logged in */}
+        {!token && !result && !loading && (
+          <div style={{
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+            padding: "14px 18px", marginBottom: 14,
+            background: "var(--bg2)",
+            border: "1px solid var(--border)",
+            borderRadius: 12, flexWrap: "wrap", gap: 10,
+          }}>
+            <div>
+              <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text2)" }}>
+                You have 3 free analyses per day.
+              </span>
+              {" "}
+              <span style={{ fontSize: 13, color: "var(--text3)" }}>
+                Sign in for 100/hour, history, compare, and more.
+              </span>
+            </div>
+            <a href="/auth" style={{
+              fontSize: 13, fontWeight: 600,
+              padding: "7px 18px", borderRadius: 8,
+              background: "linear-gradient(135deg,#6366f1,#0ea5e9)",
+              color: "#fff", textDecoration: "none", whiteSpace: "nowrap", flexShrink: 0,
+            }}>
+              Sign in free →
+            </a>
+          </div>
+        )}
 
         {error && (
           <div style={{ padding: "14px 18px", background: "rgba(239,68,68,0.08)", border: "1.5px solid rgba(239,68,68,0.3)", borderRadius: 12, color: "#ef4444", fontSize: 14, marginBottom: 14 }}>{error}</div>
