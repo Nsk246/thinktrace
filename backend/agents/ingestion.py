@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 settings = get_settings()
 
 llm = ChatAnthropic(
-    model="claude-sonnet-4-20250514",
+    model="claude-sonnet-5",
     api_key=settings.anthropic_api_key,
     max_tokens=2048,
 )
